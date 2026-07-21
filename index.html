@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FlorinDev</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- TITLEBAR -->
+  <div class="titlebar">
+    <div class="tb-dots">
+      <div class="tb-dot" style="background:#ff5f57"></div>
+      <div class="tb-dot" style="background:#febc2e"></div>
+      <div class="tb-dot" style="background:#28c840"></div>
+    </div>
+    <div class="tb-title">FlorinDev — florin.dev</div>
+  </div>
+
+  <!-- NAV -->
+  <nav>
+    <!-- nav brand -->
+<a class="nav-brand" href="#" onclick="showPage('home');return false"><em>Florin</em>Dev</a>
+    <div class="nav-item active" id="ni-home">
+      <button class="nav-btn active" onclick="showPage('home')">Acasa</button>
+      <div class="nav-underline"></div>
+    </div>
+    <div class="nav-item" id="ni-products">
+      <button class="nav-btn" onclick="showPage('products')">Proiecte</button>
+      <div class="nav-underline"></div>
+    </div>
+    <div class="nav-item" id="ni-servicii">
+      <button class="nav-btn" onclick="showPage('servicii')">Servicii</button>
+      <div class="nav-underline"></div>
+    </div>
+    <div class="nav-item" id="ni-other">
+      <button class="nav-btn" id="other-btn" onclick="toggleDd('other-dd', this)">
+        Altele
+        <svg class="nav-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="2,4 6,8 10,4"/></svg>
+      </button>
+      <div class="nav-dd" id="other-dd">
+        <div class="dd-label">Sub-proiecte</div>
+        <button class="dd-item" onclick="showSubPage('jocuri')">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="3" width="12" height="8" rx="2"/><circle cx="4.5" cy="7" r=".8" fill="currentColor" stroke="none"/><circle cx="7" cy="5.5" r=".8" fill="currentColor" stroke="none"/><circle cx="7" cy="8.5" r=".8" fill="currentColor" stroke="none"/><circle cx="9.5" cy="7" r=".8" fill="currentColor" stroke="none"/></svg>
+          Jocuri Dublate
+        </button>
+        <div class="dd-sep"></div>
+        <div class="dd-label">In curand</div>
+        <button class="dd-item disabled">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="2" width="12" height="10" rx="2"/><line x1="4" y1="6" x2="10" y2="6"/><line x1="4" y1="9" x2="7" y2="9"/></svg>
+          Filme Dublate
+        </button>
+        <button class="dd-item disabled">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="5.5"/><polyline points="4.5,5 4.5,9 9.5,7"/></svg>
+          Seriale Dublate
+        </button>
+      </div>
+      <div class="nav-underline"></div>
+    </div>
+    <div class="nav-item" id="ni-about">
+      <button class="nav-btn" onclick="showPage('about')">Despre</button>
+      <div class="nav-underline"></div>
+    </div>
+  </nav>
+
+  <!-- PAGE: HOME -->
+  <div class="page active" id="page-home">
+    <div class="page-inner">
+      <div class="home-hero">
+        <div class="home-eyebrow">florin.dev / v1.0.0</div>
+        <h1 class="home-h1">Bine ai venit<br>pe FlorinDev.</h1>
+        <p class="home-sub">Proiecte independente de software, modding si localizare. Totul open source, totul in romana.</p>
+        <div class="home-chips">
+          <span class="chip">Android</span>
+          <span class="chip">GTA Modding</span>
+          <span class="chip">Dublaje</span>
+          <span class="chip">Open Source</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE: PRODUCTS -->
+  <div class="page" id="page-products">
+    <div class="page-inner">
+      <div class="section-head">
+        <h1>Proiecte</h1>
+        <p>Nimic de afisat momentan. Revino curand.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE: JOCURI DUBLATE -->
+  <div class="page" id="page-jocuri">
+    <div class="page-inner">
+
+      <div class="section-head">
+        <h1>Jocuri Dublate</h1>
+        <p>Localizari comunitare pentru jocuri clasice Rockstar. Click pe un joc pentru detalii complete.</p>
+      </div>
+
+      <div class="ai-voice-note">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="5" width="10" height="8" rx="2"/><circle cx="6.2" cy="9" r=".9" fill="currentColor" stroke="none"/><circle cx="9.8" cy="9" r=".9" fill="currentColor" stroke="none"/><path d="M8 5V2.5M5.5 2.5h5"/></svg>
+        <div><strong>Vocile din toate proiectele de mai jos sunt generate prin AI (voice cloning)</strong>, antrenate special pentru fiecare personaj astfel incat sa reproduca cat mai fidel vocea originala din joc. Nu folosim actori umani pentru inregistrari — echipa se ocupa de antrenarea modelelor, editare si control de calitate.</div>
+      </div>
+
+      <div class="fund-summary">
+        <div class="fund-summary-top">
+          <div class="fund-summary-label">Necesar de finantat<span> — suma tuturor proiectelor nefinalizate</span></div>
+          <div class="fund-summary-num" id="fs-numbers">— <span class="of">din</span> —</div>
+        </div>
+        <div class="fund-summary-bar-wrap"><div class="fund-summary-bar" id="fs-bar" style="width:0%"></div></div>
+        <div class="fund-summary-sub" id="fs-sub"></div>
+      </div>
+
+      <div class="fund-callout">
+        <div class="fund-option">
+          <div class="fund-option-head">
+            <svg viewBox="0 0 20 20" fill="#0070ba"><path d="M6.5 17.5H2.2a.54.54 0 01-.53-.62L4.1.75A.54.54 0 014.64.3h6.27c2.16 0 3.85.46 4.79 1.52.85.97 1.1 2.04.85 3.61l-.06.37c-.83 4.25-3.66 5.72-7.28 5.72H7.2a.88.88 0 00-.88.76l-.94 5.98-.06.42zm11.9-12.13a2.82 2.82 0 00-.51-.46l-.03.21c-.78 4.02-3.37 6.06-7.69 6.06H8.16a.47.47 0 00-.47.4l-1 6.33h-.42l-.2 1.28a.47.47 0 00.47.54h3.27c.39 0 .71-.28.78-.66.05-.22.64-4.08.69-4.28a.78.78 0 01.77-.66h.49c3.16 0 5.64-1.29 6.37-5.01.3-1.55.15-2.85-.65-3.75z"/></svg>
+            Sustine prin PayPal
+          </div>
+          <div class="fund-desc">Donatii directe, fara comisioane mari. Fiecare euro merge direct spre costurile de studio si echipament pentru urmatoarele sesiuni de inregistrare.</div>
+          <div class="fund-mini-bar-wrap"><div class="fund-mini-bar" id="pp-bar" style="width:0%"></div></div>
+          <div class="fund-note" id="pp-note"></div>
+          <a class="btn btn-paypal" href="https://paypal.com" target="_blank">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M7 1l1.5 3L12 4.5 9.5 7l.5 3L7 8.5 4 10l.5-3L2 4.5 5.5 4z"/></svg>
+            Doneaza prin PayPal
+          </a>
+        </div>
+        <div class="fund-option">
+          <div class="fund-option-head" style="color:#FF5E5B">
+            <svg viewBox="0 0 20 20" fill="#FF5E5B"><path d="M19.9 7.45c-.65-3.43-4.09-3.86-4.09-3.86H.61a.54.54 0 00-.57.67l-.01.01s-.07 6.16-.02 9.94c.14 2.04 2.18 2.25 2.18 2.25s6.96-.02 10.07-.04c2.05-.36 2.26-2.16 2.24-3.14 3.66.2 6.25-2.38 5.6-5.83zm-9.3 2.95c-1.05 1.22-3.38 3.35-3.38 3.35s-.1.1-.26.02c-.06-.05-.09-.08-.09-.08-.37-.37-2.83-2.56-3.4-3.32-.59-.81-.87-2.27-.08-3.12.8-.85 2.53-.91 3.67.34 0 0 1.32-1.5 2.92-.81 1.6.69 1.54 2.53.61 3.62zm5.19.4c-.78.1-1.41.02-1.41.02V6.14h1.49s1.66.46 1.66 2.22c0 1.61-.83 2.24-1.74 2.54z"/></svg>
+            Sustine prin Ko-fi
+          </div>
+          <div class="fund-desc">Cumpara-ne o cafea. Ko-fi ne permite sa primim sprijin rapid si fara birocratie. Fiecare cafea ajuta echipa sa continue munca.</div>
+          <div class="fund-mini-bar-wrap"><div class="fund-mini-bar" style="width:20%;background:#FF5E5B"></div></div>
+          <div class="fund-note"><strong>6</strong> din <strong>30</strong> cafele colectate luna aceasta</div>
+          <a class="btn btn-kofi" href="https://ko-fi.com" target="_blank">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 3h10v5a4 4 0 01-4 4H6a4 4 0 01-4-4V3z"/><path d="M12 4h1a1.5 1.5 0 010 3h-1"/></svg>
+            Cumpara-ne o cafea
+          </a>
+        </div>
+      </div>
+
+      <div class="mod-table-wrap" id="mod-table">
+        <div class="mod-table-head">
+          <div class="mth-cell">Joc</div>
+          <div class="mth-cell">Status</div>
+          <div class="mth-cell mth-prog">Progres</div>
+          <div class="mth-cell mth-fund">Fonduri</div>
+          <div class="mth-cell mth-files right">Fisiere</div>
+          <div class="mth-cell mth-year right">An</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PAGE: SERVICII -->
+  <div class="page" id="page-servicii">
+    <div class="page-inner">
+
+      <div class="section-head">
+        <h1>Servicii</h1>
+        <p>Dezvoltare independenta de website-uri si aplicatii Android. Totul discutat direct, fara intermediari.</p>
+      </div>
+
+      <div class="svc-refund-note">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6.5"/><line x1="8" y1="5" x2="8" y2="8.5"/><circle cx="8" cy="11" r=".7" fill="currentColor" stroke="none"/></svg>
+        <div><strong>Garantie de rambursare totala</strong> — Daca nu esti multumit de rezultat, returnez orice suma platita, inclusiv avansul, fara conditii. Lucram pana esti satisfacut sau iti dau banii inapoi.</div>
+      </div>
+
+      <div class="svc-grid">
+
+        <!-- WEBSITE -->
+        <div class="svc-card svc-card-featured">
+          <div class="svc-card-header">
+            <div class="svc-card-badge-wrap">
+              <span class="svc-badge-pill">Recomandat</span>
+            </div>
+            <div class="svc-card-icon">
+              <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="18" height="13" rx="2"/><path d="M7 20h8M11 16v4"/></svg>
+            </div>
+          </div>
+          <div class="svc-card-title">Website complet</div>
+          <div class="svc-card-price">50 – 100 <span class="svc-currency">EUR</span></div>
+          <div class="svc-card-price-note">Pret final stabilit impreuna, in functie de complexitate si cerinte</div>
+
+          <div class="svc-divider"></div>
+
+          <div class="svc-features">
+            <div class="svc-feat-row">
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="2,6 5,9 10,3"/></svg>
+              Design personalizat, responsive (mobile + desktop)
+            </div>
+            <div class="svc-feat-row svc-feat-highlight">
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="2,6 5,9 10,3"/></svg>
+              <strong>2 modificari gratuite</strong> dupa livrare
+            </div>
+            <div class="svc-feat-row">
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="2,6 5,9 10,3"/></svg>
+              Setup hosting complet inclus (GitHub Pages — gratuit pentru tine)
+            </div>
+            <div class="svc-feat-row">
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="2,6 5,9 10,3"/></svg>
+              Integrare Firebase optionala — plan gratuit sau platit direct la Google
+            </div>
+            <div class="svc-feat-row">
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="2,6 5,9 10,3"/></svg>
+              Domeniu platit de tine, eu configurez DNS si conectarea la hosting
+            </div>
+            <div class="svc-feat-row">
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="2,6 5,9 10,3"/></svg>
+              Hosting platit de tine direct — nu trece niciun ban prin mine
+            </div>
+          </div>
+
+          <div class="svc-payment-block">
+            <div class="svc-payment-title">Modalitate de plata</div>
+            <div class="svc-payment-row">
+              <div class="svc-payment-step">
+                <div class="svc-payment-num">1</div>
+                <div>
+                  <div class="svc-payment-label">Avans la incepere</div>
+                  <div class="svc-payment-val">50% din pretul final</div>
+                </div>
+              </div>
+              <div class="svc-payment-arrow">→</div>
+              <div class="svc-payment-step">
+                <div class="svc-payment-num">2</div>
+                <div>
+                  <div class="svc-payment-label">Rest la livrare</div>
+                  <div class="svc-payment-val">50% dupa aprobare</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <a class="btn btn-accent svc-btn" href="mailto:contact@florin.dev">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="3" width="12" height="9" rx="1.5"/><path d="M1 4.5l6 4.5 6-4.5"/></svg>
+            Contacteaza-ma
+          </a>
+        </div>
+
+        <!-- ANDROID APP -->
+        <div class="svc-card">
+          <div class="svc-card-header">
+            <div class="svc-card-badge-wrap"></div>
+            <div class="svc-card-icon">
+              <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5" y="2" width="12" height="18" rx="3"/><circle cx="11" cy="16" r=".8" fill="currentColor" stroke="none"/><line x1="8" y1="5" x2="14" y2="5"/></svg>
+            </div>
+          </div>
+          <div class="svc-card-title">Aplicatie Android</div>
+          <div class="svc-card-price">Pret variabil</div>
+          <div class="svc-card-price-note">In functie de cerinte — discutam inainte de orice angajament financiar</div>
+
+          <div class="svc-divider"></div>
+
+          <div class="svc-features">
+            <div class="svc-feat-row svc-feat-highlight">
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="2,6 5,9 10,3"/></svg>
+              Aplicatii <strong>Cordova (WebView)</strong> — scrise in HTML, CSS si JavaScript
+            </div>
+            <div class="svc-feat-row">
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="2,6 5,9 10,3"/></svg>
+              Functioneaza offline, cu acces la hardware (camera, fisiere, senzori)
+            </div>
+            <div class="svc-feat-row">
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="2,6 5,9 10,3"/></svg>
+              APK gata de instalat sau pregatit pentru publicare pe Play Store
+            </div>
+            <div class="svc-feat-row">
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="2,6 5,9 10,3"/></svg>
+              Integrare Firebase optionala (autentificare, baza de date, notificari push)
+            </div>
+            <div class="svc-feat-row">
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="2,6 5,9 10,3"/></svg>
+              Pretul si termenul se stabilesc dupa o discutie despre cerinte
+            </div>
+          </div>
+
+          <div class="svc-info-block">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="6" cy="6" r="5"/><line x1="6" y1="4.5" x2="6" y2="7"/><circle cx="6" cy="8.5" r=".5" fill="currentColor" stroke="none"/></svg>
+            Cordova permite crearea de aplicatii Android native folosind tehnologii web — portabila, rapida de dezvoltat si cu acces deplin la API-urile dispozitivului prin plugin-uri.
+          </div>
+
+          <a class="btn btn-ghost svc-btn" href="mailto:contact@florin.dev">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="3" width="12" height="9" rx="1.5"/><path d="M1 4.5l6 4.5 6-4.5"/></svg>
+            Discutam cerintele
+          </a>
+        </div>
+
+      </div>
+
+      <div class="svc-hosting-block">
+        <div class="svc-hosting-title">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="3" width="14" height="10" rx="2"/><line x1="1" y1="7" x2="15" y2="7"/><circle cx="4" cy="5" r=".6" fill="currentColor" stroke="none"/><circle cx="6.5" cy="5" r=".6" fill="currentColor" stroke="none"/></svg>
+          Hosting, domenii si infrastructura
+        </div>
+        <div class="svc-hosting-grid">
+          <div class="svc-hosting-item">
+            <div class="svc-hosting-label">GitHub Pages</div>
+            <div class="svc-hosting-val">Gratuit pentru site-uri statice. Eu fac deployment-ul si configurarea domeniului personalizat.</div>
+          </div>
+          <div class="svc-hosting-item">
+            <div class="svc-hosting-label">Alt provider de hosting</div>
+            <div class="svc-hosting-val">Alegi tu serviciul si platesti direct la ei — eu configurez totul fara costuri suplimentare pentru mine.</div>
+          </div>
+          <div class="svc-hosting-item">
+            <div class="svc-hosting-label">Domeniu propriu</div>
+            <div class="svc-hosting-val">Platit de tine, la orice registrar preferi (Namecheap, GoDaddy etc.). Eu fac DNS-ul si conectarea.</div>
+          </div>
+          <div class="svc-hosting-item">
+            <div class="svc-hosting-label">Firebase</div>
+            <div class="svc-hosting-val">Plan gratuit inclus in setup. Daca ai nevoie de mai mult, upgradezi direct la Google — banii nu trec prin mine.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PAGE: ABOUT -->
+  <div class="page" id="page-about">
+    <div class="page-inner">
+      <div class="section-head">
+        <h1>Despre FlorinDev</h1>
+        <p>Proiect independent, creat cu pasiune</p>
+      </div>
+      <div class="about-card">
+        <h2>Cine sunt</h2>
+        <p>Florin — dezvoltator independent si pasionat de localizare. Lucrez pe proiecte de modding, software Android si dublaje romanesti pentru jocuri clasice. Totul este open source si facut cu drag pentru comunitate.</p>
+      </div>
+      <div class="about-card">
+        <h2>De ce am nevoie de sprijinul tau</h2>
+        <p>Dublajele necesita timp, microfoane bune, spatiu de inregistrare si uneori licente software. Nu primesc finantare din alta parte — fiecare donatie merge direct spre continuarea proiectului si imbunatatirea calitatii audio.</p>
+      </div>
+      <div class="about-card">
+        <h2>Contact</h2>
+        <p>Pentru colaborari, mostre audio pentru antrenarea vocilor AI sau feedback tehnic, ma gasesti la <strong>contact@florin.dev</strong></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE: PRIVACY -->
+  <div class="page" id="page-privacy">
+    <div class="page-inner">
+      <div class="section-head">
+        <h1>Politica de confidentialitate</h1>
+        <p>Ultima actualizare: ianuarie 2025</p>
+      </div>
+      <div class="about-card">
+        <h2>Date colectate</h2>
+        <p>Acest site nu colecteaza date personale cu caracter identificabil. Nu utilizam sisteme de tracking, reclame sau analiza comportamentala. Singurele date stocate local (in browser-ul tau) sunt preferintele de cookie, necesare exclusiv pentru functionarea corecta a site-ului.</p>
+      </div>
+      <div class="about-card">
+        <h2>Cookie-uri</h2>
+        <p>Folosim un singur cookie functional pentru a retine alegerea ta legata de consimtamantul cookie. Nu transmitem date catre terte parti si nu folosim cookie-uri de marketing sau analiza.</p>
+      </div>
+      <div class="about-card">
+        <h2>Servicii externe</h2>
+        <p>Site-ul foloseste Google Fonts pentru tipografie. Aceasta presupune o cerere catre serverele Google la incarcarea paginii. Consultati politica de confidentialitate Google pentru detalii despre datele colectate de acestia.</p>
+      </div>
+      <div class="about-card">
+        <h2>Contact</h2>
+        <p>Pentru orice intrebari legate de confidentialitate, ma poti contacta la <strong>contact@florin.dev</strong></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE: TERMS -->
+  <div class="page" id="page-terms">
+    <div class="page-inner">
+      <div class="section-head">
+        <h1>Termeni si conditii</h1>
+        <p>Ultima actualizare: ianuarie 2025</p>
+      </div>
+      <div class="about-card">
+        <h2>Servicii oferite</h2>
+        <p>FlorinDev ofera servicii independente de dezvoltare software: website-uri si aplicatii Android. Toate detaliile, preturile si termenele se stabilesc de comun acord inainte de inceperea oricarui proiect.</p>
+      </div>
+      <div class="about-card">
+        <h2>Plati si rambursari</h2>
+        <p>Serviciile de website se platesc in doua transe: 50% avans la incepere si 50% la livrarea finala. In cazul aplicatiilor Android, modalitatea de plata se stabileste la discutie. Orice suma platita poate fi rambursata integral, inclusiv avansul, daca clientul nu este multumit de rezultat.</p>
+      </div>
+      <div class="about-card">
+        <h2>Proprietate intelectuala</h2>
+        <p>La finalizarea platii integrale, clientul primeste drepturile depline asupra produsului livrat. Codul sursa si resursele sunt predate clientului. FlorinDev isi pastreaza dreptul de a mentiona proiectul in portofoliu, cu acordul clientului.</p>
+      </div>
+      <div class="about-card">
+        <h2>Limitarea raspunderii</h2>
+        <p>FlorinDev nu este responsabil pentru costurile de hosting, domeniu sau servicii terte platite de client. Serviciile externe (Firebase, GitHub Pages etc.) sunt supuse propriilor termeni si conditii.</p>
+      </div>
+      <div class="about-card">
+        <h2>Contact</h2>
+        <p>Pentru orice intrebari legate de acesti termeni: <strong>contact@florin.dev</strong></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="site-footer">
+    <div class="site-footer-inner">
+      <div>
+        <div class="footer-brand"><em>Florin</em>Dev</div>
+        <div class="footer-tag">Proiecte independente de software, modding si localizare.</div>
+      </div>
+      <div class="footer-links">
+        <a href="#" onclick="showPage('home');return false">Acasa</a>
+<a href="#jocuri" onclick="showSubPage('jocuri');return false">Jocuri Dublate</a>
+<a href="#servicii" onclick="showPage('servicii');return false">Servicii</a>
+<a href="#despre" onclick="showPage('about');return false">Despre</a>
+<a href="https://github.com" target="_blank">GitHub</a>
+<a href="#confidentialitate" onclick="showPage('privacy');return false">Politica de confidențialitate</a>
+<a href="#termeni" onclick="showPage('terms');return false">Termeni</a>
+      </div>
+      <div class="footer-copy">&copy; <span id="copy-year"></span> FlorinDev. Toate drepturile rezervate.</div>
+    </div>
+  </footer>
+
+  <!-- SHOWCASE PANEL -->
+  <div class="showcase-back" id="showcase-back" onclick="handleShowcaseBackdrop(event)">
+    <div class="showcase" id="showcase-panel">
+      <div class="sc-hero" id="sc-hero">
+        <div class="sc-topbar">
+          <div class="sc-breadcrumb">
+            Jocuri Dublate <span>/</span> <span id="sc-breadname"></span>
+          </div>
+          <button class="sc-close" onclick="closeShowcase()">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/></svg>
+          </button>
+        </div>
+        <div class="sc-hero-content">
+          <div class="sc-hero-info">
+            <div class="sc-game-title" id="sc-title"></div>
+            <div class="sc-game-dev" id="sc-dev"></div>
+          </div>
+          <div class="sc-hero-actions" id="sc-hero-actions"></div>
+        </div>
+      </div>
+      <div class="sc-tabs">
+        <button class="sc-tab active" onclick="switchScTab('scp-overview',this)">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="1" width="10" height="10" rx="1.5"/><line x1="3.5" y1="5" x2="8.5" y2="5"/><line x1="3.5" y1="7.5" x2="6.5" y2="7.5"/></svg>
+          Prezentare
+        </button>
+        <button class="sc-tab" onclick="switchScTab('scp-cutscenes',this)">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 2h5l2 2v6H2z"/></svg>
+          Cutscene-uri
+        </button>
+        <button class="sc-tab" onclick="switchScTab('scp-missions',this)">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 1L2 4v4l4 3 4-3V4z"/></svg>
+          Replici misiuni
+        </button>
+        <button class="sc-tab" onclick="switchScTab('scp-npc',this)">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4" cy="4" r="1.8"/><circle cx="8.5" cy="4.5" r="1.4"/><path d="M1 11c0-1.8 1.4-3 3-3s3 1.2 3 3M7 11c0-1.4 1-2.4 2.5-2.4S12 9.6 12 11"/></svg>
+          NPC-uri
+        </button>
+      </div>
+      <div class="sc-body">
+        <div class="sc-pane active" id="scp-overview">
+          <div class="ai-voice-note">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="5" width="10" height="8" rx="2"/><circle cx="6.2" cy="9" r=".9" fill="currentColor" stroke="none"/><circle cx="9.8" cy="9" r=".9" fill="currentColor" stroke="none"/><path d="M8 5V2.5M5.5 2.5h5"/></svg>
+            <div>Vocile din acest proiect sunt <strong>generate prin AI (voice cloning)</strong>, antrenate sa reproduca cat mai fidel vocile personajelor originale din joc — nu sunt inregistrari cu actori umani.</div>
+          </div>
+          <div id="sc-stats-row" class="sc-stats-row"></div>
+          <div id="sc-prog-block" class="sc-prog-block"></div>
+          <div id="sc-authors-row" class="sc-authors-row"></div>
+          <div id="sc-desc" class="sc-desc"></div>
+        </div>
+        <div class="sc-pane" id="scp-cutscenes">
+          <div class="cat-sub-head">Cutscene-uri dublate</div>
+          <div id="sc-filetree"></div>
+          <div class="cat-sub-head" style="margin-top:16px">Cutscene-uri nedublate</div>
+          <div id="sc-todotree"></div>
+        </div>
+        <div class="sc-pane" id="scp-missions">
+          <div id="sc-missions"></div>
+        </div>
+        <div class="sc-pane" id="scp-npc">
+          <div id="sc-npc"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FEEDBACK MODAL -->
+  <div class="fb-back" id="fb-modal" onclick="handleFbBackdrop(event)">
+    <div class="fb-box">
+      <div class="fb-title">Feedback fisier</div>
+      <div class="fb-file" id="fb-fname"></div>
+      <div class="fb-opts">
+        <button class="fb-opt fb-ok" onclick="pickFb(this,'ok')">
+          <div class="fb-opt-ico"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><polyline points="2,6 5,9 10,3"/></svg></div>
+          <div><div class="fb-lbl">Arata bine</div><div class="fb-sub">Calitate buna, fara probleme</div></div>
+        </button>
+        <button class="fb-opt fb-rw" onclick="pickFb(this,'rework')">
+          <div class="fb-opt-ico"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2.5v3.2l1.8.9"/><circle cx="6" cy="6" r="4.5"/></svg></div>
+          <div><div class="fb-lbl">Necesita revizuire</div><div class="fb-sub">Exista aspecte imbunatatibile</div></div>
+        </button>
+        <button class="fb-opt fb-bad" onclick="pickFb(this,'bad')">
+          <div class="fb-opt-ico"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg></div>
+          <div><div class="fb-lbl">Problema majora</div><div class="fb-sub">Calitate slaba sau sincronizare gresita</div></div>
+        </button>
+      </div>
+      <textarea class="fb-note" id="fb-note" placeholder="Nota optionala — descrie problema sau sugestia ta..."></textarea>
+      <div class="fb-actions">
+        <button class="btn btn-ghost" onclick="closeFb()">Anuleaza</button>
+        <button class="btn btn-accent" onclick="submitFb()">Trimite feedback</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <!-- COOKIE BANNER -->
+  <div class="cookie-banner" id="cookie-banner">
+    <div class="cookie-banner-inner">
+      <div class="cookie-text">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6.5"/><circle cx="5.5" cy="6.5" r=".8" fill="currentColor" stroke="none"/><circle cx="10" cy="5" r=".6" fill="currentColor" stroke="none"/><circle cx="10.5" cy="9.5" r=".7" fill="currentColor" stroke="none"/><circle cx="6" cy="10.5" r=".5" fill="currentColor" stroke="none"/></svg>
+        <span>Folosim cookie-uri functionale pentru a retine preferintele tale. Nu tracking, nu reclame. <a href="/confidentialitate" onclick="showPage('privacy');return false">Politica de confidentialitate</a></span>
+      </div>
+      <div class="cookie-actions">
+        <button class="btn btn-ghost cookie-decline" onclick="setCookieChoice(false)">Refuz</button>
+        <button class="btn btn-accent cookie-accept" onclick="setCookieChoice(true)">Accept</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
