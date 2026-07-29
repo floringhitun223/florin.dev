@@ -109,8 +109,6 @@ const STRINGS = {
     descToggleLess:         'Mai puțin',
     copiaza:                'Copiaza',
     descarca:               'Descarca',
-    indisponibil:           'Indisponibil',
-    verLatest:              'Cel mai recent',
     proiecte:               'Proiecte',
     solicita:               'Solicita oferta',
     de:                     'de',
@@ -175,8 +173,6 @@ const STRINGS = {
     descToggleLess:         'Show less',
     copiaza:                'Copy',
     descarca:               'Download',
-    indisponibil:           'Unavailable',
-    verLatest:              'Latest',
     proiecte:               'Projects',
     solicita:               'Request a quote',
     de:                     'by',
@@ -243,10 +239,6 @@ function translateDOM() {
   document.querySelectorAll('[data-i18n-title]').forEach(el => {
     el.title = t(el.dataset.i18nTitle);
   });
-  // Re-render open project page so dynamic content picks up the current lang
-  if (currentMod) {
-    _renderProjectPage(currentMod);
-  }
 }
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────
@@ -678,7 +670,7 @@ function _renderProjectPage(m) {
         <div class="ver-content">
           <div class="ver-top">
             <span class="ver-tag">${v.tag}</span>
-            ${isLatest ? `<span class="ver-latest-badge">${t('verLatest')}</span>` : ''}
+            ${isLatest ? '<span class="ver-latest-badge">Latest</span>' : ''}
             ${v.date ? `<span class="ver-date">${v.date}</span>` : ''}
           </div>
           ${v.note ? `<div class="ver-note">${v.note}</div>` : ''}
@@ -688,7 +680,7 @@ function _renderProjectPage(m) {
             ${v.commit ? `<span class="ver-commit">${v.commit}</span>` : ''}
             <a class="ver-dl-btn ${canDl ? '' : 'ver-dl-locked'}"
                ${canDl ? `href="${vUrl}" target="_blank"` : 'onclick="return false"'}
-               title="${canDl ? t('descarca') : t('indisponibil')}">
+               title="${canDl ? 'Descarca' : 'Indisponibil'}">
               <svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6">
                 ${canDl
                   ? `<polyline points="6.5,2 6.5,9"/><polyline points="3,6.5 6.5,10 10,6.5"/><line x1="2" y1="11.5" x2="11" y2="11.5"/>`
@@ -1156,9 +1148,7 @@ async function loadServices() {
     const guaranteeEl = document.getElementById('svc-guarantee');
     if (guaranteeEl) guaranteeEl.style.display = '';
 
-    // Show guarantee now that we have data
-    const guaranteeEl = document.getElementById('svc-guarantee');
-    if (guaranteeEl) guaranteeEl.style.display = '';
+
 
     const list = rawList.map(_svcNormalize).sort((a, b) => a.order - b.order);
 
