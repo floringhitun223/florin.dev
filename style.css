@@ -186,6 +186,28 @@ nav {
 .btn-ghost:hover { background: rgba(255,255,255,.09); color: var(--text); }
 .btn-download { background: var(--green-dim); color: var(--green); border: 1px solid rgba(34,197,94,.25); }
 .btn-download:hover { background: rgba(34,197,94,.2); }
+.btn-download-hero {
+  align-self: flex-start;
+  margin-top: 10px;
+  padding: 12px 28px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  gap: 10px;
+  border-radius: var(--r-md);
+  border: 1.5px solid rgba(34,197,94,.5);
+  box-shadow: 0 0 28px rgba(34,197,94,.18), inset 0 1px 0 rgba(255,255,255,.06);
+  background: rgba(34,197,94,.15);
+  color: #4ade80;
+  transition: background .15s, box-shadow .15s, transform .1s;
+}
+.btn-download-hero:hover {
+  background: rgba(34,197,94,.25);
+  box-shadow: 0 0 40px rgba(34,197,94,.28);
+  transform: translateY(-1px);
+}
+.btn-download-hero:active { transform: translateY(0); }
+.btn-download-hero svg { width: 17px; height: 17px; stroke-width: 2; }
 .btn-locked { background: rgba(255,255,255,.04); color: var(--text-3); border: 1px solid var(--border-sub); cursor: not-allowed; }
 
 /* ── MOD TABLE ── */
@@ -326,23 +348,24 @@ nav {
 
 /* Hero */
 .proj-hero {
-  position: relative; height: 220px; flex-shrink: 0; overflow: hidden;
+  position: relative; height: 290px; flex-shrink: 0; overflow: hidden;
 }
 .proj-hero-art { position: absolute; inset: 0; }
 .proj-hero-art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .proj-hero-overlay {
   position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(0,0,0,.05) 0%, rgba(12,12,14,.92) 100%);
+  background: linear-gradient(180deg, rgba(0,0,0,.0) 0%, rgba(0,0,0,.4) 40%, rgba(12,12,14,.97) 100%);
 }
 .proj-hero-content {
   position: absolute; bottom: 0; left: 0; right: 0;
-  padding: 0 28px 24px; z-index: 2;
+  padding: 0 28px 28px; z-index: 2;
+  display: flex; flex-direction: column; gap: 6px;
 }
 .proj-hero-name {
-  font-size: 24px; font-weight: 700; letter-spacing: -.03em;
-  line-height: 1.2; margin-bottom: 4px;
+  font-size: 26px; font-weight: 700; letter-spacing: -.03em;
+  line-height: 1.2; margin-bottom: 0;
 }
-.proj-hero-meta { font-size: 12px; color: var(--text-3); font-family: 'JetBrains Mono', monospace; margin-bottom: 10px; }
+.proj-hero-meta { font-size: 12px; color: var(--text-3); font-family: 'JetBrains Mono', monospace; margin-bottom: 0; }
 .proj-hero-authors { display: flex; gap: 5px; flex-wrap: wrap; }
 
 /* Scrollable body */
