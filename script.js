@@ -632,6 +632,7 @@ function _renderProjectPage(m) {
   }
   document.getElementById('proj-title-crumb').textContent = m.name;
   document.getElementById('proj-hero-name').textContent   = m.name;
+  document.title = m.name + ' · FlorinDev';
   document.getElementById('proj-hero-meta').textContent   = m.dev;
   document.getElementById('proj-hero-authors').innerHTML  = m.authors.map(authorChip).join('');
   const statusLabels = { done: t('statusDone'), wip: t('statusWip'), early: t('statusEarly') };
@@ -721,6 +722,15 @@ const NAV_MAP = {
   home: 'ni-home', products: 'ni-products',
   servicii: 'ni-servicii', about: 'ni-about',
 };
+const PAGE_TITLE_MAP = {
+  home:      'FlorinDev',
+  products:  'Proiecte · FlorinDev',
+  servicii:  'Servicii · FlorinDev',
+  about:     'Despre · FlorinDev',
+  privacy:   'Confidențialitate · FlorinDev',
+  terms:     'Termeni · FlorinDev',
+  tech:      'Tehnologie · FlorinDev',
+};
 
 let _openingProject = false;
 let _pendingProjectId = null;
@@ -774,6 +784,7 @@ function _activatePage(pageId) {
   if (navId) document.getElementById(navId).classList.add('active');
   if (pageId === 'privacy') loadLegalPage('privacy');
   if (pageId === 'terms')   loadLegalPage('terms');
+  document.title = PAGE_TITLE_MAP[pageId] || 'FlorinDev';
 }
 
 function _closeProjectSilent() {
@@ -781,6 +792,7 @@ function _closeProjectSilent() {
   document.getElementById('proj-backdrop').classList.remove('open');
   document.body.style.overflow = '';
   currentMod = null;
+  document.title = PAGE_TITLE_MAP['products'];
 }
 
 window.addEventListener('hashchange', () => { if (_openingProject) return; resolveRoute(); });
