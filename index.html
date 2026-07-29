@@ -112,26 +112,149 @@
 
   <!-- PAGE: HOME -->
   <div class="page active" id="page-home">
-    <div class="page-inner">
-      <div class="home-hero">
-        <div class="home-eyebrow" id="home-eyebrow">florindev.ro / v1.0.0</div>
+
+    <!-- HERO SPLIT -->
+    <div class="home-split">
+      <div class="home-split-bg"></div>
+
+      <!-- Left: text -->
+      <div class="home-left">
+        <div class="home-eyebrow" id="home-eyebrow">
+          <span class="home-eyebrow-dot"></span>
+          <span id="home-eyebrow-text">florindev.ro / v1.0.0</span>
+        </div>
         <h1 class="home-h1" id="home-headline" data-i18n="home-headline">Bine ai venit<br>pe FlorinDev.</h1>
         <p class="home-sub" id="home-subtext" data-i18n="home-subtext">Proiecte independente de software, modding si localizare. Totul open source, totul in romana.</p>
+
         <div class="home-chips" id="home-chips">
-          <span class="chip" data-i18n="chip-android">Android</span>
+          <span class="chip chip-accent" data-i18n="chip-android">Android</span>
           <span class="chip" data-i18n="chip-gta">GTA Modding</span>
           <span class="chip" data-i18n="chip-dub">Dublaje</span>
           <span class="chip" data-i18n="chip-os">Open Source</span>
         </div>
+
         <div class="home-cta">
-          <a class="btn btn-accent" href="#proiecte" id="cta-primary" data-i18n="cta-primary">Vezi proiectele</a>
-          <a class="btn btn-ghost" href="#despre" id="cta-secondary" data-i18n="cta-secondary">Contacteaza-ma</a>
+          <a class="btn btn-accent btn-lg" href="#proiecte" id="cta-primary" data-i18n="cta-primary">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="2,7 12,7"/><polyline points="7,2 12,7 7,12"/></svg>
+            Vezi proiectele
+          </a>
+          <a class="btn btn-ghost btn-lg" href="#despre" id="cta-secondary" data-i18n="cta-secondary">Contacteaza-ma</a>
+        </div>
+
+        <!-- Stats row — populated by renderHomeStats() from Firebase site/config -->
+        <div class="home-stats">
+          <!-- skeleton until JS fills -->
+          <div class="home-stat"><span class="home-stat-val">…</span><span class="home-stat-lbl">&nbsp;</span></div>
+        </div>
+      </div>
+
+      <!-- Right: terminal art -->
+      <div class="home-right">
+        <div class="home-terminal">
+          <div class="ht-bar">
+            <div class="ht-dots">
+              <span style="background:#ff5f57"></span>
+              <span style="background:#febc2e"></span>
+              <span style="background:#28c840"></span>
+            </div>
+            <div class="ht-title">florindev ~ bash</div>
+          </div>
+          <div class="ht-body">
+            <div class="ht-line"><span class="ht-prompt">~</span> <span class="ht-cmd" id="ht-cmd-1"></span></div>
+            <div class="ht-output" id="ht-out-1" style="display:none">
+              <div class="ht-file"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M2 0h5.5L10 2.5V10a1 1 0 01-1 1H2a1 1 0 01-1-1V1a1 1 0 011-1z" opacity=".3"/><path d="M6 0l4 4H6V0z" opacity=".6"/></svg> gta-sa-ro.zip</div>
+              <div class="ht-file"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M2 0h5.5L10 2.5V10a1 1 0 01-1 1H2a1 1 0 01-1-1V1a1 1 0 011-1z" opacity=".3"/><path d="M6 0l4 4H6V0z" opacity=".6"/></svg> NotifAlert.apk</div>
+              <div class="ht-file"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M1 2h10v8a1 1 0 01-1 1H2a1 1 0 01-1-1V2z" opacity=".3"/><rect x="3" y="0" width="6" height="3" rx="1" opacity=".6"/></svg> README.md</div>
+            </div>
+            <div class="ht-line" id="ht-line-2" style="display:none"><span class="ht-prompt">~</span> <span class="ht-cmd" id="ht-cmd-2"></span></div>
+            <div class="ht-output" id="ht-out-2" style="display:none">
+              <div class="ht-badge ht-badge-green">✓ GTA San Andreas — Localizare RO v3.2</div>
+              <div class="ht-badge ht-badge-blue">✓ NotifAlert — Android v1.4</div>
+              <div class="ht-badge ht-badge-purple">✓ Mafia II — Dublaj RO complet</div>
+            </div>
+            <div class="ht-line" id="ht-line-3" style="display:none"><span class="ht-prompt">~</span> <span class="ht-cursor">█</span></div>
+          </div>
         </div>
       </div>
     </div>
+
+    <!-- OFFER BANNER — populated by loadHomeOffer() from Firebase site/offer -->
+    <div class="home-section" id="home-offer-section" style="display:none">
+      <div class="home-section-inner">
+        <div class="home-offer-banner" id="home-offer-banner"></div>
+      </div>
+    </div>
+
+    <!-- FEATURED PROJECTS STRIP -->
+    <div class="home-section home-section-split" id="home-proj-section">
+      <div class="home-section-inner home-split-layout">
+
+        <!-- Left: label + headline + CTA -->
+        <div class="hsl-left">
+          <div class="home-sec-label" data-i18n="sec-proj-label">Proiecte recente</div>
+          <h2 class="hsl-headline" data-i18n="sec-proj-headline">Software open source<br>făcut în România.</h2>
+          <a class="hsl-cta" href="#proiecte">
+            <span data-i18n="sec-proj-cta">Vezi toate proiectele</span>
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3,7 11,7"/><polyline points="7,3 11,7 7,11"/></svg>
+          </a>
+        </div>
+
+        <!-- Right: blob + cards -->
+        <div class="hsl-right">
+          <div class="hsl-blob"></div>
+          <div class="home-proj-grid" id="home-proj-grid">
+            <!-- populated by renderHomeFeatured() -->
+            <div class="home-proj-card hpc-placeholder"><div class="hpc-thumb"></div><div class="hpc-name hpc-skel" style="width:65%"></div></div>
+            <div class="home-proj-card hpc-placeholder"><div class="hpc-thumb"></div><div class="hpc-name hpc-skel" style="width:50%"></div></div>
+            <div class="home-proj-card hpc-placeholder"><div class="hpc-thumb"></div><div class="hpc-name hpc-skel" style="width:55%"></div></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ABOUT TEASER — populated by renderHomeAbout() from Firebase site/about -->
+    <div class="home-section" id="home-about-section" style="display:none">
+      <div class="home-section-inner">
+        <div class="home-sec-head">
+          <div class="home-sec-label" id="home-about-label">Despre</div>
+          <a class="home-sec-link" href="#despre">
+            <span id="home-about-link-text">Mai multe</span>
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="3,6 9,6"/><polyline points="6,3 9,6 6,9"/></svg>
+          </a>
+        </div>
+        <div class="home-about-strip" id="home-about-strip"></div>
+      </div>
+    </div>
+
+    <!-- SERVICES TEASER -->
+    <div class="home-section home-section-split home-section-alt" id="home-svc-section" style="display:none">
+      <div class="home-section-inner home-split-layout home-split-reverse">
+
+        <!-- Left: label + headline + CTA -->
+        <div class="hsl-left">
+          <div class="home-sec-label" data-i18n="sec-svc-label">Servicii</div>
+          <h2 class="hsl-headline" data-i18n="sec-svc-headline">Dezvoltare web<br>și mobile pentru tine.</h2>
+          <a class="hsl-cta" href="#servicii">
+            <span data-i18n="sec-svc-cta">Detalii &amp; prețuri</span>
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3,7 11,7"/><polyline points="7,3 11,7 7,11"/></svg>
+          </a>
+        </div>
+
+        <!-- Right: blob + cards -->
+        <div class="hsl-right">
+          <div class="hsl-blob hsl-blob-svc"></div>
+          <div class="home-svc-grid" id="home-svc-grid">
+            <!-- populated by renderHomeSvcTeaser() -->
+          </div>
+        </div>
+
+      </div>
+    </div>
+
   </div>
 
-  <!-- PAGE: PROIECTE (merged with Jocuri Dublate) -->
+
   <div class="page" id="page-products">
     <div class="page-inner">
       <div class="section-head">

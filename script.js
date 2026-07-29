@@ -115,6 +115,12 @@ const STRINGS = {
     de:                     'de',
     tehnologii:             'Tehnologii',
     nuDescriereAdaugata:    'Nicio descriere adaugata inca pentru aceasta tehnologie.\nPoti adauga continut din panoul de administrare.',
+    'sec-proj-label':       'Proiecte recente',
+    'sec-proj-headline':    'Software open source\nfăcut în România.',
+    'sec-proj-cta':         'Vezi toate proiectele',
+    'sec-svc-label':        'Servicii',
+    'sec-svc-headline':     'Dezvoltare web\nși mobile pentru tine.',
+    'sec-svc-cta':          'Detalii & prețuri',
     // DOM i18n keys (data-i18n)
     'nav-home':             'Acasa',
     'nav-projects':         'Proiecte',
@@ -150,6 +156,8 @@ const STRINGS = {
     'back-home':            'Inapoi acasa',
     '404-title':            'Pagina nu a fost gasita',
     '404-sub':              'Adresa pe care ai accesat-o nu exista sau continutul a fost mutat.',
+    'svc-extras-title':     'Extra-uri optionale',
+    'svc-extras-free':      'Gratuit',
     'footer-tag':           'Proiecte independente de software, modding si localizare.',
     'footer-rights':        'Toate drepturile rezervate.',
     'support-paypal':       'Sustine pe PayPal',
@@ -184,6 +192,12 @@ const STRINGS = {
     de:                     'by',
     tehnologii:             'Technologies',
     nuDescriereAdaugata:    'No description added yet for this technology.\nYou can add content from the admin panel.',
+    'sec-proj-label':       'Recent projects',
+    'sec-proj-headline':    'Open source software\nbuilt in Romania.',
+    'sec-proj-cta':         'View all projects',
+    'sec-svc-label':        'Services',
+    'sec-svc-headline':     'Web & mobile\ndevelopment for you.',
+    'sec-svc-cta':          'Details & pricing',
     // DOM i18n keys (data-i18n)
     'nav-home':             'Home',
     'nav-projects':         'Projects',
@@ -219,6 +233,8 @@ const STRINGS = {
     'back-home':            'Back to home',
     '404-title':            'Page not found',
     '404-sub':              'The address you accessed does not exist or the content has been moved.',
+    'svc-extras-title':     'Optional add-ons',
+    'svc-extras-free':      'Free',
     'footer-tag':           'Independent software, modding and localization projects.',
     'footer-rights':        'All rights reserved.',
     'support-paypal':       'Support on PayPal',
@@ -491,6 +507,7 @@ async function loadIndex() {
       .sort((a, b) => b.timestamp - a.timestamp);
     totalPages = Math.max(1, Math.ceil(INDEX.length / PAGE_SIZE));
     renderMods();
+    renderHomeStats({});   // render with computed stats immediately
     preloadPage(currentPage);
     if (_pendingProjectId) { _doOpenProjectFromFirestore(_pendingProjectId); _pendingProjectId = null; }
     if (_pendingPage) {
@@ -506,7 +523,11 @@ async function loadIndex() {
 async function preloadPage(page) {
   const items = getPageItems(page);
   const toLoad = items.filter(e => !MOD_CACHE[e.id]);
-  if (!toLoad.length) return;
+  if (!toLoad.length) {
+    // Already cached — still update home if on page 1
+    if (page === 1) { renderHomeFeatured(); playTerminalAnim(); }
+    return;
+  }
   await Promise.all(toLoad.map(async entry => {
     try {
       const d = await getDoc(doc(db, 'projects', entry.id));
@@ -514,6 +535,7 @@ async function preloadPage(page) {
     } catch(e) { console.warn('Could not load mod', entry.id, e); }
   }));
   renderMods();
+  if (page === 1) { renderHomeFeatured(); playTerminalAnim(); }
 }
 
 function showModsLoading() {
@@ -960,10 +982,10 @@ async function loadSiteSettings() {
       if (el) el.textContent = heroTitle;
     }
 
-    // Hero tagline / eyebrow (cfg-hero-tagline → heroTagline)
+    // Hero tagline / eyebrow (cfg-hero-tagline → heroTagline) — text span only
     const heroTagline = _langVal(d, 'heroTagline');
     if (heroTagline) {
-      const el = document.getElementById('home-eyebrow');
+      const el = document.getElementById('home-eyebrow-text');
       if (el) el.textContent = heroTagline;
     }
 
@@ -1007,6 +1029,10 @@ async function loadSiteSettings() {
         a.href = 'mailto:' + d.email;
       });
     }
+
+    // Home stats + eyebrow version
+    renderHomeStats(d);
+    updateEyebrow(d);
 
     // CTA buttons on home (cfg-cta-primary / cfg-cta-secondary → ctaPrimary / ctaSecondary)
     const ctaPrimary = _langVal(d, 'ctaPrimary');
@@ -1108,6 +1134,7 @@ function _svcNormalize(raw) {
     badge:    raw.badge    || '',
     order:    parseInt(raw.order) || 999,
     features: Array.isArray(raw.features) ? raw.features : [],
+    extras:   Array.isArray(raw.extras)   ? raw.extras   : [],
     icon:     raw.icon     || '',
     category: raw.category || '',
   };
@@ -1127,12 +1154,42 @@ function _svcRowHtml(svc, idPrefix) {
     ? `<div class="svc-row-creator">${t('de')} ${svc.creator}</div>`
     : '';
 
-  const feats = (svc.features || []).map(f =>
-    `<div class="svc-feat-item">${checkSvg}<span>${f}</span></div>`
-  ).join('');
+  // Features — support both string (legacy) and {ro,en} objects
+  const feats = (svc.features || []).map(f => {
+    const label = (typeof f === 'object') ? (_langVal(f, '') || f.ro || f.en || '') : f;
+    return label ? `<div class="svc-feat-item">${checkSvg}<span>${label}</span></div>` : '';
+  }).join('');
+
+  // Extras — interactive checkboxes with optional price
+  const extrasId = `extras-${idPrefix}`;
+  const extras = (svc.extras || []);
+  let extrasHtml = '';
+  if (extras.length) {
+    const rows = extras.map((ex, i) => {
+      const label   = _langVal(ex, 'label') || (typeof ex.label === 'string' ? ex.label : '') || '';
+      const isFree  = ex.free || !ex.price;
+      const exCurr  = ex.currency || currency;
+      const priceTag = isFree
+        ? `<span class="svc-extra-free">${t('svc-extras-free')}</span>`
+        : `<span class="svc-extra-price">+${exCurr}${ex.price}</span>`;
+      return `
+        <label class="svc-extra-row" data-idx="${i}" data-price="${isFree ? 0 : (parseFloat(ex.price)||0)}" data-currency="${exCurr}" data-free="${isFree}">
+          <input type="checkbox" class="svc-extra-chk" onchange="_svcUpdateTotal('${idPrefix}')" />
+          <span class="svc-extra-check-icon">${checkSvg}</span>
+          <span class="svc-extra-label">${label}</span>
+          ${priceTag}
+        </label>`;
+    }).join('');
+    extrasHtml = `
+      <div class="svc-extras-wrap" id="${extrasId}">
+        <div class="svc-extras-title">${t('svc-extras-title')}</div>
+        ${rows}
+        <div class="svc-extras-total" id="total-${idPrefix}" style="display:none"></div>
+      </div>`;
+  }
 
   return `
-    <div class="svc-row" data-svc-id="${idPrefix}">
+    <div class="svc-row" data-svc-id="${idPrefix}" data-base-price="${parseFloat(svc.price)||0}" data-currency="${currency}">
       <div class="svc-row-main">
         <div class="svc-row-icon ${iconClass}">${_svcIconSvg(svc)}</div>
         <div class="svc-row-info">
@@ -1142,15 +1199,16 @@ function _svcRowHtml(svc, idPrefix) {
           ${tagline ? `<div class="svc-row-tagline">${tagline}</div>` : ''}
         </div>
         <div class="svc-row-right">
-          <span class="svc-row-price">${currency}${svc.price || ''}</span>
+          <span class="svc-row-price" id="price-${idPrefix}">${currency}${svc.price || ''}</span>
           ${chevSvg}
         </div>
       </div>
       <div class="svc-row-detail">
         ${creator}
         ${feats ? `<div class="svc-feat-list">${feats}</div>` : ''}
+        ${extrasHtml}
         <div class="svc-row-actions">
-          <a class="btn btn-accent" href="mailto:${_contactEmail}">
+          <a class="btn btn-accent" href="mailto:${_contactEmail}" id="cta-${idPrefix}">
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1" y="3" width="12" height="9" rx="1.5"/><polyline points="1,3 7,8.5 13,3"/></svg>
             ${t('solicita')}
           </a>
@@ -1158,6 +1216,46 @@ function _svcRowHtml(svc, idPrefix) {
       </div>
     </div>`;
 }
+
+window._svcUpdateTotal = function(idPrefix) {
+  const row      = document.querySelector(`.svc-row[data-svc-id="${idPrefix}"]`);
+  if (!row) return;
+  const base     = parseFloat(row.dataset.basePrice) || 0;
+  const currency = row.dataset.currency || '€';
+  let extra = 0;
+  row.querySelectorAll('.svc-extra-row').forEach(exRow => {
+    if (exRow.querySelector('.svc-extra-chk')?.checked && exRow.dataset.free !== 'true') {
+      extra += parseFloat(exRow.dataset.price) || 0;
+    }
+  });
+  const total    = base + extra;
+  const priceEl  = document.getElementById('price-' + idPrefix);
+  const totalEl  = document.getElementById('total-' + idPrefix);
+  if (priceEl) priceEl.textContent = currency + (total || base || '');
+  if (totalEl) {
+    if (extra > 0) {
+      totalEl.style.display = '';
+      totalEl.textContent = 'Total: ' + currency + total;
+    } else {
+      totalEl.style.display = 'none';
+    }
+  }
+  // Update mailto with selected extras
+  const ctaEl = document.getElementById('cta-' + idPrefix);
+  if (ctaEl) {
+    const selected = [];
+    row.querySelectorAll('.svc-extra-row').forEach(exRow => {
+      if (exRow.querySelector('.svc-extra-chk')?.checked) {
+        selected.push(exRow.querySelector('.svc-extra-label')?.textContent?.trim());
+      }
+    });
+    const svcName = row.querySelector('.svc-row-name')?.textContent?.trim() || '';
+    const subject = selected.length
+      ? `${svcName} + ${selected.join(', ')}`
+      : svcName;
+    ctaEl.href = `mailto:${_contactEmail}?subject=${encodeURIComponent(subject)}`;
+  }
+};
 
 function _svcInitAccordion(container) {
   container.querySelectorAll('.svc-row-main').forEach(main => {
@@ -1192,6 +1290,9 @@ async function loadServices() {
 
 
     const list = rawList.map(_svcNormalize).sort((a, b) => a.order - b.order);
+
+    // Update home page services teaser
+    renderHomeSvcTeaser(list);
 
     // Legacy category tabs — only when older data still has categories
     const cats = [];
@@ -1322,6 +1423,9 @@ async function loadAbout() {
 
     // Update contact email if set in settings
     if (d.contactEmail) _contactEmail = d.contactEmail;
+
+    // Render home page about teaser
+    renderHomeAbout(d);
   } catch(e) {
     console.warn('Could not load about:', e);
   }
@@ -1360,7 +1464,301 @@ window.closeProject       = closeProject;
 window.handleProjBackdrop = handleProjBackdrop;
 window.setCookieChoice    = setCookieChoice;
 
-// ── BOOT ───────────────────────────────────────────────────────────────────
+// ── HOME: FEATURED PROJECTS ────────────────────────────────────────────────
+// Called once INDEX + first-page mods are in MOD_CACHE.
+// Replaces placeholder cards with the top-3 most-recent public projects.
+const ICON_COLORS = ['hpc-icon-purple', 'hpc-icon-green', 'hpc-icon-amber', 'hpc-icon-blue'];
+function _hpcIcon(mod, colorCls) {
+  if (mod.image) {
+    return `<div class="hpc-icon ${colorCls}" style="padding:0;overflow:hidden">
+      <img src="${mod.image}" alt="${mod.name}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">
+    </div>`;
+  }
+  const letter = mod.name.charAt(0).toUpperCase();
+  return `<div class="hpc-icon ${colorCls}" style="font-size:18px;font-weight:700;color:rgba(255,255,255,.75)">${letter}</div>`;
+}
+
+function renderHomeFeatured() {
+  const grid = document.getElementById('home-proj-grid');
+  if (!grid) return;
+  const top3 = INDEX.slice(0, 3);
+  if (!top3.length) return;
+
+  const cards = top3.map((entry, i) => {
+    const mod = MOD_CACHE[entry.id];
+    if (!mod) {
+      return `<div class="home-proj-card hpc-placeholder">
+        <div class="hpc-thumb"></div>
+        <div class="hpc-name hpc-skel" style="width:65%"></div>
+      </div>`;
+    }
+    const ver = mod.versions[0]?.tag || '';
+    const thumbHtml = mod.image
+      ? `<img src="${mod.image}" alt="${mod.name}" class="hpc-thumb-img">`
+      : `<div class="hpc-thumb-fallback">${mod.name.charAt(0).toUpperCase()}</div>`;
+    return `<div class="home-proj-card" role="button" tabindex="0"
+        onclick="window.location.hash='proiecte/${mod.id}'"
+        onkeydown="if(event.key==='Enter')window.location.hash='proiecte/${mod.id}'">
+      <div class="hpc-thumb">${thumbHtml}</div>
+      <div class="hpc-info">
+        <div class="hpc-name">${mod.name}</div>
+        <div class="hpc-dev">${mod.dev}</div>
+      </div>
+      ${ver ? `<div class="hpc-tag">${ver}</div>` : ''}
+    </div>`;
+  });
+
+  grid.innerHTML = cards.join('');
+}
+
+// ── HOME: SERVICES TEASER ─────────────────────────────────────────────────
+// Renders up to 3 service cards in the home page teaser strip.
+// Called after loadServices() resolves with data.
+function renderHomeSvcTeaser(list) {
+  const section = document.getElementById('home-svc-section');
+  const grid = document.getElementById('home-svc-grid');
+  if (!grid || !section) return;
+  const top3 = list.slice(0, 3);
+  if (!top3.length) {
+    section.style.display = 'none';
+    return;
+  }
+  const SVC_ICON_SVG = {
+    serviciu:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`,
+    produs:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9z"/><path d="M12 11l8-4.5M12 11v9M12 11L4 6.5"/></svg>`,
+    abonament: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M12 6v6l4 2"/></svg>`,
+    pachet:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="17"/><line x1="9.5" y1="14.5" x2="14.5" y2="14.5"/></svg>`,
+  };
+  grid.innerHTML = top3.map(svc => {
+    const iconHtml = svc.icon && svc.icon.startsWith('ti-')
+      ? `<i class="ti ${svc.icon}" style="font-size:22px"></i>`
+      : (SVC_ICON_SVG[svc.type] || SVC_ICON_SVG.serviciu);
+    const priceHtml = svc.price
+      ? `<div class="hsc-price">${svc.currency || '€'}${svc.price}</div>`
+      : '';
+    return `<div class="home-svc-card" role="button" tabindex="0"
+        onclick="window.location.hash='servicii'"
+        onkeydown="if(event.key==='Enter')window.location.hash='servicii'">
+      <div class="hsc-icon">${iconHtml}</div>
+      <div class="hsc-info">
+        <div class="hsc-name">${svc.name}</div>
+        <div class="hsc-desc">${svc.desc || ''}</div>
+      </div>
+      ${priceHtml}
+    </div>`;
+  }).join('');
+  section.style.display = '';
+}
+
+// ── HOME: ABOUT TEASER ────────────────────────────────────────────────────
+// Renders a compact "about me" strip from the already-fetched site/about data.
+// Called by loadAbout() after the about card is built for the About page.
+function renderHomeAbout(d) {
+  const section = document.getElementById('home-about-section');
+  const strip   = document.getElementById('home-about-strip');
+  if (!section || !strip) return;
+
+  const name   = _langVal(d, 'name') || d.name || '';
+  const role   = _langVal(d, 'role') || '';
+  const bio    = _langVal(d, 'bio')  || _langVal(d, 'bio2') || '';
+  const skills = Array.isArray(d.skills) ? d.skills : [];
+  const photo  = d.photo || '';
+
+  // Need at least name or bio to show anything
+  if (!name && !bio) return;
+
+  // Truncate bio to ~160 chars for the teaser
+  const bioTeaser = bio.length > 160 ? bio.slice(0, 157).trimEnd() + '…' : bio;
+
+  const photoHtml = photo
+    ? `<img src="${photo}" alt="${name}" class="hab-photo">`
+    : (name ? `<div class="hab-avatar">${name.charAt(0).toUpperCase()}</div>` : '');
+
+  const skillsHtml = skills.length
+    ? `<div class="hab-skills">${skills.slice(0, 6).map(s =>
+        `<span class="chip chip-sm">${s}</span>`
+      ).join('')}</div>`
+    : '';
+
+  strip.innerHTML = `
+    <div class="home-about-card">
+      <div class="hab-left">
+        ${photoHtml}
+        <div class="hab-meta">
+          ${name ? `<div class="hab-name">${name}</div>` : ''}
+          ${role ? `<div class="hab-role">${role}</div>` : ''}
+        </div>
+      </div>
+      <div class="hab-right">
+        ${bioTeaser ? `<p class="hab-bio">${bioTeaser}</p>` : ''}
+        ${skillsHtml}
+      </div>
+    </div>`;
+
+  // Update label text bilingually
+  const labelEl    = document.getElementById('home-about-label');
+  const linkTextEl = document.getElementById('home-about-link-text');
+  if (labelEl)    labelEl.textContent    = window.siteLang === 'ro' ? 'Despre' : 'About';
+  if (linkTextEl) linkTextEl.textContent = window.siteLang === 'ro' ? 'Mai multe' : 'Learn more';
+
+  section.style.display = '';
+}
+
+
+// Reads homeStatN_val / homeStatN_lbl from site/config (up to 3 slots).
+// Falls back to computed: project count / open source / locale.
+function renderHomeStats(cfg) {
+  const row = document.querySelector('.home-stats');
+  if (!row) return;
+
+  // Try admin-configured stats first (homeStatNVal / homeStatNLbl)
+  const slots = [];
+  for (let i = 1; i <= 3; i++) {
+    const val = _langVal(cfg, `homeStat${i}Val`) || cfg[`homeStat${i}Val`];
+    const lbl = _langVal(cfg, `homeStat${i}Lbl`) || cfg[`homeStat${i}Lbl`];
+    if (val && lbl) slots.push({ val, lbl });
+  }
+
+  // Computed fallbacks
+  if (!slots.length) {
+    const projCount = INDEX.length;
+    const lang = window.siteLang;
+    slots.push(
+      { val: projCount > 0 ? projCount + '+' : '…', lbl: lang === 'ro' ? 'Proiecte' : 'Projects' },
+      { val: '100%', lbl: 'Open Source' },
+      { val: 'RO', lbl: lang === 'ro' ? 'În română' : 'In Romanian' },
+    );
+  }
+
+  row.innerHTML = slots.map((s, i) => [
+    `<div class="home-stat">
+      <span class="home-stat-val">${s.val}</span>
+      <span class="home-stat-lbl">${s.lbl}</span>
+    </div>`,
+    i < slots.length - 1 ? '<div class="home-stat-div"></div>' : '',
+  ].join('')).join('');
+}
+
+// ── HOME: TERMINAL ANIMATION ───────────────────────────────────────────────
+// Replaces the static terminal with real project names once INDEX is ready.
+let _termPlayed = false;
+function playTerminalAnim() {
+  if (_termPlayed) return;
+  _termPlayed = true;
+
+  // Build ls output lines from real projects (up to 3)
+  const top3 = INDEX.slice(0, 3);
+  const fileLines = top3.map(entry => {
+    const mod = MOD_CACHE[entry.id];
+    const name = mod ? mod.name : entry.id;
+    const ver  = mod?.versions?.[0]?.tag || '';
+    const ext  = name.toLowerCase().includes('android') || name.toLowerCase().includes('notif') ? '.apk' : '.zip';
+    const fname = name.toLowerCase().replace(/\s+/g, '-') + (ver ? '-' + ver : '') + ext;
+    return `<div class="ht-file"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M2 0h5.5L10 2.5V10a1 1 0 01-1 1H2a1 1 0 01-1-1V1a1 1 0 011-1z" opacity=".3"/><path d="M6 0l4 4H6V0z" opacity=".6"/></svg> ${fname}</div>`;
+  });
+
+  // Build git status lines from real projects
+  const statusLines = top3.map(entry => {
+    const mod = MOD_CACHE[entry.id];
+    const name = mod ? mod.name : entry.id;
+    const ver  = mod?.versions?.[0]?.tag || 'v1.0.0';
+    const statusCls = mod?.status === 'done' ? 'ht-badge-green' : (mod?.status === 'wip' ? 'ht-badge-blue' : 'ht-badge-purple');
+    return `<div class="ht-badge ${statusCls}">✓ ${name} — ${ver}</div>`;
+  });
+
+  const cmd1El  = document.getElementById('ht-cmd-1');
+  const out1El  = document.getElementById('ht-out-1');
+  const line2El = document.getElementById('ht-line-2');
+  const cmd2El  = document.getElementById('ht-cmd-2');
+  const out2El  = document.getElementById('ht-out-2');
+  const line3El = document.getElementById('ht-line-3');
+  if (!cmd1El) return;
+
+  // Inject real file/status content
+  if (out1El && fileLines.length) out1El.innerHTML = fileLines.join('');
+  if (out2El && statusLines.length) out2El.innerHTML = statusLines.join('');
+
+  function typeText(el, text, cb) {
+    let i = 0;
+    el.textContent = '';
+    const iv = setInterval(() => {
+      el.textContent += text[i++];
+      if (i >= text.length) { clearInterval(iv); if (cb) setTimeout(cb, 300); }
+    }, 55);
+  }
+
+  typeText(cmd1El, 'ls ~/proiecte', () => {
+    out1El.style.display = '';
+    setTimeout(() => {
+      line2El.style.display = '';
+      typeText(cmd2El, 'git status --short', () => {
+        out2El.style.display = '';
+        setTimeout(() => { line3El.style.display = ''; }, 200);
+      });
+    }, 400);
+  });
+}
+
+// ── HOME: EYEBROW VERSION ──────────────────────────────────────────────────
+function updateEyebrow(cfg) {
+  const el = document.getElementById('home-eyebrow-text');
+  if (!el) return;
+  const ver = cfg?.siteVersion || cfg?.version || '';
+  el.textContent = ver ? `florindev.ro / ${ver}` : 'florindev.ro';
+}
+
+// ── HOME: OFFER BANNER ────────────────────────────────────────────────────
+// Reads from Firestore `site/offer`.
+// Expected fields (all bilingual via _langVal):
+//   title    — headline text
+//   desc     — body text
+//   btnText  — CTA button label
+//   btnUrl   — CTA href (external or hash)
+//   active   — boolean; if false/absent banner stays hidden
+// Optional accent fields:
+//   accentColor — CSS color for the glow/border tint (default: var(--accent))
+async function loadHomeOffer() {
+  try {
+    const snap = await getDoc(doc(db, 'site', 'offer'));
+    if (!snap.exists()) return;
+    const d = snap.data();
+
+    if (!d.active) return;
+
+    const title   = _langVal(d, 'title')   || '';
+    const desc    = _langVal(d, 'desc')    || '';
+    const btnText = _langVal(d, 'btnText') || (window.siteLang === 'ro' ? 'Află mai multe' : 'Learn more');
+    const btnUrl  = d.btnUrl || '#servicii';
+    const accent  = d.accentColor || '';
+
+    if (!title && !desc) return;
+
+    const section = document.getElementById('home-offer-section');
+    const banner  = document.getElementById('home-offer-banner');
+    if (!section || !banner) return;
+
+    const isExternal = btnUrl.startsWith('http');
+    const accentStyle = accent ? `--offer-accent:${accent};` : '';
+
+    banner.innerHTML = `
+      <div class="hob-glow" style="${accentStyle}"></div>
+      <div class="hob-body">
+        <div class="hob-text">
+          ${title ? `<div class="hob-title">${title}</div>` : ''}
+          ${desc  ? `<div class="hob-desc">${desc}</div>`   : ''}
+        </div>
+        <a class="hob-btn" href="${btnUrl}"${isExternal ? ' target="_blank" rel="noopener"' : ''}>
+          ${btnText}
+        </a>
+      </div>`;
+
+    section.style.display = '';
+  } catch(e) {
+    console.warn('Could not load offer:', e);
+  }
+}
+
+
 document.getElementById('copy-year').textContent = new Date().getFullYear();
 translateDOM();
 resolveRoute();
@@ -1368,4 +1766,5 @@ initCookieBanner();
 loadIndex();
 loadSiteSettings().then(() => loadServices());
 loadAbout();
+loadHomeOffer();
 if (localStorage.getItem('fd_cookie_choice') === '1') initAnalytics();
