@@ -109,6 +109,7 @@ const STRINGS = {
     descToggleLess:         'Mai puțin',
     copiaza:                'Copiaza',
     descarca:               'Descarca',
+    getItOn:                'DISPONIBIL PE',
     proiecte:               'Proiecte',
     solicita:               'Solicita oferta',
     de:                     'de',
@@ -153,6 +154,10 @@ const STRINGS = {
     'footer-rights':        'Toate drepturile rezervate.',
     'support-paypal':       'Sustine pe PayPal',
     'support-kofi':         'Sustine pe Ko-fi',
+    'cookie-text':    'Folosim servicii externe (Firebase, Google Fonts) pentru funcționarea site-ului. Acceptând, activezi și <strong>Google Analytics</strong> (date anonimizate).',
+    'cookie-decline': 'Refuz',
+    'cookie-accept':  'Accept',
+    'cookie-link':    'Politică de confidențialitate',
   },
   eng: {
     // JS-generated strings
@@ -173,6 +178,7 @@ const STRINGS = {
     descToggleLess:         'Show less',
     copiaza:                'Copy',
     descarca:               'Download',
+    getItOn:                'GET IT ON',
     proiecte:               'Projects',
     solicita:               'Request a quote',
     de:                     'by',
@@ -217,6 +223,10 @@ const STRINGS = {
     'footer-rights':        'All rights reserved.',
     'support-paypal':       'Support on PayPal',
     'support-kofi':         'Support on Ko-fi',
+    'cookie-text':    'We use external services (Firebase, Google Fonts) to run this site. By accepting, you also enable <strong>Google Analytics</strong> (anonymized data).',
+    'cookie-decline': 'Decline',
+    'cookie-accept':  'Accept',
+    'cookie-link':    'Privacy Policy',
   },
 };
 
@@ -640,8 +650,27 @@ function _renderProjectPage(m) {
   document.getElementById('proj-status-badge').innerHTML =
     `<span class="status-pill ${statusClasses[m.status] || 'pill-early'}">${statusLabels[m.status] || m.status}</span>`;
   const dlBtn = document.getElementById('proj-download-btn');
-  if (m.downloadUrl) { dlBtn.style.display = 'inline-flex'; dlBtn.onclick = () => window.open(m.downloadUrl, '_blank'); }
-  else dlBtn.style.display = 'none';
+  if (m.downloadUrl) {
+    dlBtn.style.display = 'inline-flex';
+    dlBtn.onclick = () => window.open(m.downloadUrl, '_blank');
+    const isPlayStore = m.downloadUrl.includes('play.google.com');
+    if (isPlayStore) {
+      dlBtn.classList.add('btn-play-store');
+      dlBtn.classList.remove('btn-download');
+      dlBtn.innerHTML = `
+        <svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="6.5,2 6.5,9"/><polyline points="3,6.5 6.5,10 10,6.5"/><line x1="2" y1="11.5" x2="11" y2="11.5"/></svg>
+        <span style="display:flex;flex-direction:column;align-items:flex-start;line-height:1.1">
+          <span style="font-size:10px;font-weight:400;letter-spacing:.06em;opacity:.85">${t('getItOn')}</span>
+          <span style="font-size:18px;font-weight:700;letter-spacing:-.01em">Google Play</span>
+        </span>`;
+    } else {
+      dlBtn.classList.remove('btn-play-store');
+      dlBtn.classList.add('btn-download');
+      dlBtn.innerHTML = `<svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="6.5,2 6.5,9"/><polyline points="3,6.5 6.5,10 10,6.5"/><line x1="2" y1="11.5" x2="11" y2="11.5"/></svg><span>${t('descarca')}</span>`;
+    }
+  } else {
+    dlBtn.style.display = 'none';
+  }
   const marksEl = document.getElementById('proj-marks');
   if (marksEl) {
     if (m.marks?.length) {
@@ -1309,7 +1338,15 @@ function showToast(msg) {
 function initCookieBanner() {
   if (localStorage.getItem('fd_cookie_choice') !== null) return;
   const banner = document.getElementById('cookie-banner');
-  if (banner) banner.classList.add('visible');
+  if (!banner) return;
+  // Translate all cookie banner strings at show-time (after siteLang is set)
+  const textSpan = banner.querySelector('.cookie-text span');
+  if (textSpan) textSpan.innerHTML = t('cookie-text') + ' <a href="#confidentialitate">' + t('cookie-link') + '</a>';
+  const declineBtn = banner.querySelector('.cookie-decline');
+  if (declineBtn) declineBtn.textContent = t('cookie-decline');
+  const acceptBtn = banner.querySelector('.cookie-accept');
+  if (acceptBtn) acceptBtn.textContent = t('cookie-accept');
+  banner.classList.add('visible');
 }
 function setCookieChoice(accepted) {
   localStorage.setItem('fd_cookie_choice', accepted ? '1' : '0');
