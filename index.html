@@ -2,6 +2,9 @@
 <html lang="ro">
 <head>
   <meta charset="UTF-8" />
+  <!-- FOUC GUARD: hides all .page instantly so JS can reveal the correct one
+       without a flash of the default home page. Must stay here, before style.css. -->
+  <script>!function(){var s=document.createElement('style');s.id='__fouc_guard';s.textContent='.page{display:none!important}';document.head.appendChild(s);}();</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   
   <!-- TITLE OPTIMIZAT -->
@@ -62,6 +65,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
   <link rel="manifest" href="/site.webmanifest">
 </head>
+
 <body>
 
   <!-- TITLEBAR -->
@@ -95,23 +99,23 @@
 
   <!-- NAV -->
   <nav>
-    <a class="nav-brand" href="#"><em>Florin</em>Dev</a>
-    <div class="nav-item active" id="ni-home">
-      <a class="nav-btn active" href="#" data-i18n="nav-home">Acasa</a>
+    <a class="nav-brand" href="?"><em>Florin</em>Dev</a>
+    <div class="nav-item" id="ni-home">
+      <a class="nav-btn" href="?" data-i18n="nav-home">Acasa</a>
     </div>
     <div class="nav-item" id="ni-products">
-      <a class="nav-btn" href="#proiecte" data-i18n="nav-projects">Proiecte</a>
+      <a class="nav-btn" href="?page=proiecte" data-i18n="nav-projects">Proiecte</a>
     </div>
     <div class="nav-item" id="ni-servicii">
-      <a class="nav-btn" href="#servicii" data-i18n="nav-services">Servicii</a>
+      <a class="nav-btn" href="?page=servicii" data-i18n="nav-services">Servicii</a>
     </div>
     <div class="nav-item" id="ni-about">
-      <a class="nav-btn" href="#despre" data-i18n="nav-about">Despre</a>
+      <a class="nav-btn" href="?page=despre" data-i18n="nav-about">Despre</a>
     </div>
   </nav>
 
   <!-- PAGE: HOME -->
-  <div class="page active" id="page-home">
+  <div class="page" id="page-home">
 
     <!-- HERO SPLIT -->
     <div class="home-split">
@@ -134,11 +138,11 @@
         </div>
 
         <div class="home-cta">
-          <a class="btn btn-accent btn-lg" href="#proiecte" id="cta-primary" data-i18n="cta-primary">
+          <a class="btn btn-accent btn-lg" href="?page=proiecte" id="cta-primary" data-i18n="cta-primary">
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="2,7 12,7"/><polyline points="7,2 12,7 7,12"/></svg>
             Vezi proiectele
           </a>
-          <a class="btn btn-ghost btn-lg" href="#despre" id="cta-secondary" data-i18n="cta-secondary">Contacteaza-ma</a>
+          <a class="btn btn-ghost btn-lg" href="?page=despre" id="cta-secondary" data-i18n="cta-secondary">Contacteaza-ma</a>
         </div>
 
         <!-- Stats row — populated by renderHomeStats() from Firebase site/config -->
@@ -192,8 +196,8 @@
         <!-- Left: label + headline + CTA -->
         <div class="hsl-left">
           <div class="home-sec-label" data-i18n="sec-proj-label">Proiecte recente</div>
-          <h2 class="hsl-headline" data-i18n="sec-proj-headline">Software open source<br>făcut în România.</h2>
-          <a class="hsl-cta" href="#proiecte">
+          <h2 class="hsl-headline" data-i18n="sec-proj-headline">Proiecte făcute<br>cu pasiune în România.</h2>
+          <a class="hsl-cta" href="?page=proiecte">
             <span data-i18n="sec-proj-cta">Vezi toate proiectele</span>
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3,7 11,7"/><polyline points="7,3 11,7 7,11"/></svg>
           </a>
@@ -213,20 +217,6 @@
       </div>
     </div>
 
-    <!-- ABOUT TEASER — populated by renderHomeAbout() from Firebase site/about -->
-    <div class="home-section" id="home-about-section" style="display:none">
-      <div class="home-section-inner">
-        <div class="home-sec-head">
-          <div class="home-sec-label" id="home-about-label">Despre</div>
-          <a class="home-sec-link" href="#despre">
-            <span id="home-about-link-text">Mai multe</span>
-            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="3,6 9,6"/><polyline points="6,3 9,6 6,9"/></svg>
-          </a>
-        </div>
-        <div class="home-about-strip" id="home-about-strip"></div>
-      </div>
-    </div>
-
     <!-- SERVICES TEASER -->
     <div class="home-section home-section-split home-section-alt" id="home-svc-section" style="display:none">
       <div class="home-section-inner home-split-layout home-split-reverse">
@@ -235,7 +225,7 @@
         <div class="hsl-left">
           <div class="home-sec-label" data-i18n="sec-svc-label">Servicii</div>
           <h2 class="hsl-headline" data-i18n="sec-svc-headline">Dezvoltare web<br>și mobile pentru tine.</h2>
-          <a class="hsl-cta" href="#servicii">
+          <a class="hsl-cta" href="?page=servicii">
             <span data-i18n="sec-svc-cta">Detalii &amp; prețuri</span>
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3,7 11,7"/><polyline points="7,3 11,7 7,11"/></svg>
           </a>
@@ -249,6 +239,20 @@
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- ABOUT TEASER — populated by renderHomeAbout() from Firebase site/about -->
+    <div class="home-section" id="home-about-section" style="display:none">
+      <div class="home-section-inner">
+        <div class="home-sec-head">
+          <div class="home-sec-label" id="home-about-label">Despre</div>
+          <a class="home-sec-link" href="?page=despre">
+            <span id="home-about-link-text">Mai multe</span>
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="3,6 9,6"/><polyline points="6,3 9,6 6,9"/></svg>
+          </a>
+        </div>
+        <div class="home-about-strip" id="home-about-strip"></div>
       </div>
     </div>
 
@@ -344,7 +348,7 @@
         </div>
         <div class="not-found-title" data-i18n="private-title">Proiect privat</div>
         <div class="not-found-sub" data-i18n="private-sub">Acest proiect nu este disponibil public. Contacteaza autorul daca crezi ca ai acces.</div>
-        <a class="btn btn-ghost not-found-btn" href="#proiecte" data-i18n="back-projects">Inapoi la proiecte</a>
+        <a class="btn btn-ghost not-found-btn" href="?page=proiecte" data-i18n="back-projects">Inapoi la proiecte</a>
       </div>
     </div>
   </div>
@@ -353,7 +357,7 @@
   <div class="page" id="page-tech">
     <div class="page-inner">
       <div class="tech-header">
-        <button class="tech-back" onclick="window.location.hash='despre'">
+        <button class="tech-back" onclick="_navTo('despre');resolveRoute()">
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="9,2 4,7 9,12"/></svg>
           <span data-i18n="nav-about">Despre</span>
         </button>
@@ -375,7 +379,7 @@
         <div class="not-found-code">404</div>
         <div class="not-found-title" data-i18n="404-title">Pagina nu a fost gasita</div>
         <div class="not-found-sub" data-i18n="404-sub">Adresa pe care ai accesat-o nu exista sau continutul a fost mutat.</div>
-        <a class="btn btn-accent not-found-btn" href="#" data-i18n="back-home">Inapoi acasa</a>
+        <a class="btn btn-accent not-found-btn" href="?" data-i18n="back-home">Inapoi acasa</a>
       </div>
     </div>
   </div>
@@ -388,13 +392,13 @@
         <div class="footer-tag" data-i18n="footer-tag">Proiecte independente de software, modding si localizare.</div>
       </div>
       <div class="footer-links">
-        <a href="#" data-i18n="nav-home">Acasa</a>
-        <a href="#proiecte" data-i18n="nav-projects">Proiecte</a>
-        <a href="#servicii" data-i18n="nav-services">Servicii</a>
-        <a href="#despre" data-i18n="nav-about">Despre</a>
+        <a href="?" data-i18n="nav-home">Acasa</a>
+        <a href="?page=proiecte" data-i18n="nav-projects">Proiecte</a>
+        <a href="?page=servicii" data-i18n="nav-services">Servicii</a>
+        <a href="?page=despre" data-i18n="nav-about">Despre</a>
         <a href="https://github.com" target="_blank" id="footer-github">GitHub</a>
-        <a href="#confidentialitate" data-i18n="nav-privacy">Confidentialitate</a>
-        <a href="#termeni" data-i18n="nav-terms">Termeni</a>
+        <a href="?page=confidentialitate" data-i18n="nav-privacy">Confidentialitate</a>
+        <a href="?page=termeni" data-i18n="nav-terms">Termeni</a>
       </div>
       <div class="footer-social" id="footer-social">
         <!-- populated by loadSiteSettings() -->

@@ -61,13 +61,48 @@ function _detectLang() {
 
 window.siteLang = _detectLang();
 
-// Write lang param into the URL without reloading (preserves hash)
+// Write lang param into the URL without reloading (preserves all other params)
 function _syncLangParam() {
   const url = new URL(window.location.href);
   url.searchParams.set('lang', window.siteLang);
-  window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+  window.history.replaceState(null, '', url.pathname + url.search);
 }
 _syncLangParam();
+
+// ── HASH → QUERY REDIRECT ────────────────────────────────────────────────
+// Maps old #hash slugs to ?page= equivalents so bookmarked/linked hashes work.
+const HASH_PAGE_MAP = {
+  '':                 null,          // # alone → home
+  'proiecte':         'proiecte',
+  'servicii':         'servicii',
+  'despre':           'despre',
+  'confidentialitate':'confidentialitate',
+  'termeni':          'termeni',
+  'tehnologie':       'tehnologie',
+};
+
+function _redirectHashToQuery() {
+  const hash = window.location.hash; // e.g. "#proiecte" or ""
+  if (!hash || hash === '#') return false;
+  const slug = hash.slice(1).toLowerCase().split('?')[0]; // strip leading #
+  if (!(slug in HASH_PAGE_MAP)) return false;
+  const url = new URL(window.location.href);
+  url.hash = '';  // remove hash
+  const page = HASH_PAGE_MAP[slug];
+  if (page) url.searchParams.set('page', page);
+  else url.searchParams.delete('page');
+  window.history.replaceState(null, '', url.pathname + url.search);
+  return true;
+}
+
+// Run once on page load to handle any incoming #hash URL
+_redirectHashToQuery();
+
+// Handle any future hashchange (e.g. browser back/forward to a hashed URL)
+window.addEventListener('hashchange', () => {
+  _redirectHashToQuery();
+  resolveRoute();
+});
 
 // Pick the right field value:
 // 1. If data[field] is a {ro, en} object → extract by lang
@@ -116,7 +151,7 @@ const STRINGS = {
     tehnologii:             'Tehnologii',
     nuDescriereAdaugata:    'Nicio descriere adaugata inca pentru aceasta tehnologie.\nPoti adauga continut din panoul de administrare.',
     'sec-proj-label':       'Proiecte recente',
-    'sec-proj-headline':    'Software open source\nfăcut în România.',
+    'sec-proj-headline':    'Proiecte făcute\ncu pasiune în România.',
     'sec-proj-cta':         'Vezi toate proiectele',
     'sec-svc-label':        'Servicii',
     'sec-svc-headline':     'Dezvoltare web\nși mobile pentru tine.',
@@ -193,7 +228,7 @@ const STRINGS = {
     tehnologii:             'Technologies',
     nuDescriereAdaugata:    'No description added yet for this technology.\nYou can add content from the admin panel.',
     'sec-proj-label':       'Recent projects',
-    'sec-proj-headline':    'Open source software\nbuilt in Romania.',
+    'sec-proj-headline':    'Projects built\nwith passion in Romania.',
     'sec-proj-cta':         'View all projects',
     'sec-svc-label':        'Services',
     'sec-svc-headline':     'Web & mobile\ndevelopment for you.',
@@ -427,8 +462,8 @@ function renderMods() {
     row.className = 'mod-row';
     row.setAttribute('role', 'button');
     row.setAttribute('tabindex', '0');
-    row.onclick   = () => { window.location.hash = 'proiecte/' + entry.id; };
-    row.onkeydown = e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); window.location.hash = 'proiecte/' + entry.id; } };
+    row.onclick   = () => { openProject(entry.id); };
+    row.onkeydown = e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); openProject(entry.id); } };
     const mod = MOD_CACHE[entry.id];
     const name     = mod ? mod.name     : entry.id;
     const dev      = mod ? mod.dev      : '';
@@ -485,7 +520,18 @@ function renderPagination() {
 }
 function goPage(page) {
   if (page < 1 || page > totalPages || page === currentPage) return;
-  window.location.hash = 'proiecte/pagina/' + page;
+  const url = new URL(window.location.href);
+  url.searchParams.set('page', 'proiecte');
+  url.searchParams.delete('id');
+  if (page > 1) {
+    url.searchParams.set('pagina', page);
+  } else {
+    url.searchParams.delete('pagina');
+  }
+  window.history.pushState(null, '', url.pathname + url.search);
+  currentPage = page;
+  renderMods();
+  preloadPage(currentPage);
 }
 window.goPage = goPage;
 
@@ -549,9 +595,11 @@ function showModsLoading() {
 
 // ── PROJECT PAGE ───────────────────────────────────────────────────────────
 function openProject(modId) {
-  _openingProject = true;
-  window.location.hash = 'proiecte/' + modId;
-  _openingProject = false;
+  const url = new URL(window.location.href);
+  url.searchParams.set('page', 'proiecte');
+  url.searchParams.set('id', modId);
+  url.searchParams.delete('pagina');
+  window.history.pushState(null, '', url.pathname + url.search);
   _doOpenProjectFromFirestore(modId);
 }
 
@@ -751,10 +799,18 @@ function _renderProjectPage(m) {
 }
 
 function closeProject() {
-  window.location.hash = currentPage > 1 ? 'proiecte/pagina/' + currentPage : 'proiecte';
+  const url = new URL(window.location.href);
+  url.searchParams.set('page', 'proiecte');
+  url.searchParams.delete('id');
+  if (currentPage > 1) {
+    url.searchParams.set('pagina', currentPage);
+  } else {
+    url.searchParams.delete('pagina');
+  }
+  window.history.pushState(null, '', url.pathname + url.search);
   const backdrop = document.getElementById('proj-backdrop');
-  const page     = document.getElementById('proj-page');
-  page.classList.remove('open');
+  const projPage = document.getElementById('proj-page');
+  projPage.classList.remove('open');
   setTimeout(() => { backdrop.classList.remove('open'); document.body.style.overflow = ''; }, 300);
   currentMod = null;
 }
@@ -763,11 +819,15 @@ function handleProjBackdrop(e) {
   if (e.target === document.getElementById('proj-backdrop')) closeProject();
 }
 
-// ── HASH ROUTING ───────────────────────────────────────────────────────────
-const HASH_PAGE_MAP = {
-  '': 'home', 'proiecte': 'products', 'servicii': 'servicii',
-  'despre': 'about', 'confidentialitate': 'privacy', 'termeni': 'terms',
-  'tehnologie': 'tech',
+// ── QUERY-PARAM ROUTING ────────────────────────────────────────────────────
+const QUERY_PAGE_MAP = {
+  '':                 'home',
+  'proiecte':         'products',
+  'servicii':         'servicii',
+  'despre':           'about',
+  'confidentialitate':'privacy',
+  'termeni':          'terms',
+  'tehnologie':       'tech',
 };
 const NAV_MAP = {
   home: 'ni-home', products: 'ni-products',
@@ -783,50 +843,82 @@ const PAGE_TITLE_MAP = {
   tech:      'Tehnologie · FlorinDev',
 };
 
-let _openingProject = false;
+// Helpers to navigate to a named section without clobbering lang/other params
+function _navTo(pageSlug, extra = {}) {
+  const url = new URL(window.location.href);
+  // Clear routing params, keep lang
+  url.searchParams.delete('page');
+  url.searchParams.delete('id');
+  url.searchParams.delete('pagina');
+  url.searchParams.delete('slug');
+  if (pageSlug) url.searchParams.set('page', pageSlug);
+  Object.entries(extra).forEach(([k, v]) => {
+    if (v !== null && v !== undefined) url.searchParams.set(k, v);
+    else url.searchParams.delete(k);
+  });
+  window.history.pushState(null, '', url.pathname + url.search);
+}
+
 let _pendingProjectId = null;
 let _pendingPage = null;
 
 function resolveRoute() {
-  const raw   = window.location.hash.replace(/^#\/?/, '');
-  const parts = raw.split('/');
-  const sec   = parts[0];
-  const sub   = parts[1];
-  const sub2  = parts[2];
+  const params   = new URLSearchParams(window.location.search);
+  const sec      = (params.get('page') || '').toLowerCase();
+  const projId   = params.get('id')     || '';
+  const paginaRaw= params.get('pagina') || '';
+  const techSlug = params.get('slug')   || '';
+
   const projPage = document.getElementById('proj-page');
-  if (projPage.classList.contains('open') && !(sec === 'proiecte' && sub && sub !== 'pagina')) {
+  if (projPage.classList.contains('open') && !(sec === 'proiecte' && projId)) {
     _closeProjectSilent();
   }
+
   if (sec === 'proiecte') {
     _activatePage('products');
-    if (sub === 'pagina' && sub2) {
-      const pg = parseInt(sub2) || 1;
-      if (INDEX.length > 0 && pg > totalPages) { show404(); return; }
-      currentPage = Math.max(1, Math.min(pg, totalPages));
-      if (INDEX.length > 0) { renderMods(); preloadPage(currentPage); }
-      else _pendingPage = currentPage;
+    // ?page=proiecte&id=some-project
+    if (projId) {
+      if (INDEX.length > 0) _doOpenProjectFromFirestore(projId);
+      else _pendingProjectId = projId;
       return;
     }
-    if (sub && sub !== 'pagina') {
-      if (INDEX.length > 0) _doOpenProjectFromFirestore(sub);
-      else _pendingProjectId = sub;
+    // ?page=proiecte&pagina=3
+    if (paginaRaw) {
+      const pg = parseInt(paginaRaw) || 1;
+      if (INDEX.length > 0 && pg > totalPages) { show404(); return; }
+      currentPage = Math.max(1, Math.min(pg, totalPages || 1));
+      if (INDEX.length > 0) { renderMods(); preloadPage(currentPage); }
+      else _pendingPage = currentPage;
       return;
     }
     currentPage = 1;
     if (INDEX.length > 0) { renderMods(); preloadPage(1); }
     return;
   }
-  if (sec === 'tehnologie' && sub) {
+
+  if (sec === 'tehnologie' && techSlug) {
     _activatePage('tech');
-    loadTechPage(sub);
+    loadTechPage(techSlug);
     return;
   }
 
-  const pageId = HASH_PAGE_MAP[sec] || 'home';
+  const pageId = QUERY_PAGE_MAP[sec] || 'home';
   _activatePage(pageId);
 }
 
 function _activatePage(pageId) {
+  // On the very first call, lift the FOUC guard and fade the page in
+  const guards = document.querySelectorAll('#__fouc_guard');
+  if (guards.length) {
+    guards.forEach(g => g.remove());
+    // Inject a one-shot fade-in so the initial page appears smoothly
+    const fade = document.createElement('style');
+    fade.textContent = '.page.active { animation: page-reveal 160ms ease both; } @keyframes page-reveal { from { opacity:0; } to { opacity:1; } }';
+    document.head.appendChild(fade);
+    // Remove the animation rule after it has played so SPA transitions use their own class
+    setTimeout(() => fade.remove(), 300);
+  }
+
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const el = document.getElementById('page-' + pageId);
   if (el) el.classList.add('active');
@@ -846,11 +938,74 @@ function _closeProjectSilent() {
   document.title = PAGE_TITLE_MAP['products'];
 }
 
-window.addEventListener('hashchange', () => { if (_openingProject) return; resolveRoute(); });
+window.addEventListener('popstate', () => { resolveRoute(); });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && document.getElementById('proj-page').classList.contains('open'))
     closeProject();
 });
+
+// ── SPA LINK INTERCEPTOR ───────────────────────────────────────────────────
+// Intercepts all internal ?page= link clicks and handles them via pushState +
+// resolveRoute so navigation is instant (no full page reload).
+// Also preserves the current lang param and applies a subtle fade transition.
+(function _initSpaLinks() {
+  // Tiny CSS for the page-transition fade — injected once
+  const _style = document.createElement('style');
+  _style.textContent = `
+    .spa-transition { animation: spa-fade-in 180ms ease both; }
+    @keyframes spa-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  `;
+  document.head.appendChild(_style);
+
+  function _triggerTransition() {
+    // Animate whichever .page is about to become active
+    requestAnimationFrame(() => {
+      const active = document.querySelector('.page.active');
+      if (!active) return;
+      active.classList.remove('spa-transition');
+      // Force reflow so removing+re-adding the class restarts the animation
+      void active.offsetWidth;
+      active.classList.add('spa-transition');
+    });
+  }
+
+  function _handleInternalLink(href) {
+    // Build a full URL so we can surgically update only routing params
+    const target = new URL(href, window.location.href);
+
+    // Preserve the current lang in the destination
+    const currentLang = new URLSearchParams(window.location.search).get('lang');
+    if (currentLang && !target.searchParams.has('lang')) {
+      target.searchParams.set('lang', currentLang);
+    }
+
+    window.history.pushState(null, '', target.pathname + target.search);
+    resolveRoute();
+    _triggerTransition();
+  }
+
+  // Single delegated listener on the document — zero per-element overhead
+  document.addEventListener('click', e => {
+    // Walk up from the clicked element to find an <a> tag
+    const anchor = e.target.closest('a[href]');
+    if (!anchor) return;
+
+    const href = anchor.getAttribute('href');
+    if (!href) return;
+
+    // External links, mailto:, tel:, javascript: — let the browser handle them
+    if (/^(https?:\/\/|mailto:|tel:|javascript:)/i.test(href)) return;
+
+    // Only intercept links that contain ?page= (our SPA routing param)
+    if (!href.includes('?page=') && !href.includes('&page=')) return;
+
+    // Ctrl/Cmd+click or middle-click → open in new tab normally
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
+
+    e.preventDefault();
+    _handleInternalLink(href);
+  }, { passive: false });
+})();
 
 function show404() {
   _closeProjectSilent();
@@ -1395,7 +1550,7 @@ async function loadAbout() {
     const skillsHtml = (d.skills || []).length
       ? `<div class="about-skills">${d.skills.map(s => {
           const slug = s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-          return `<a class="chip chip-link" href="#tehnologie/${slug}" role="button">${s}</a>`;
+          return `<a class="chip chip-link" href="?page=tehnologie&slug=${slug}" role="button">${s}</a>`;
         }).join('')}</div>`
       : '';
 
@@ -1445,7 +1600,7 @@ function initCookieBanner() {
   if (!banner) return;
   // Translate all cookie banner strings at show-time (after siteLang is set)
   const textSpan = banner.querySelector('.cookie-text span');
-  if (textSpan) textSpan.innerHTML = t('cookie-text') + ' <a href="#confidentialitate">' + t('cookie-link') + '</a>';
+  if (textSpan) textSpan.innerHTML = t('cookie-text') + ' <a href="?page=confidentialitate">' + t('cookie-link') + '</a>';
   const declineBtn = banner.querySelector('.cookie-decline');
   if (declineBtn) declineBtn.textContent = t('cookie-decline');
   const acceptBtn = banner.querySelector('.cookie-accept');
@@ -1463,6 +1618,9 @@ function setCookieChoice(accepted) {
 window.closeProject       = closeProject;
 window.handleProjBackdrop = handleProjBackdrop;
 window.setCookieChoice    = setCookieChoice;
+window.openProject        = openProject;
+window._navTo             = _navTo;
+window.resolveRoute       = resolveRoute;
 
 // ── HOME: FEATURED PROJECTS ────────────────────────────────────────────────
 // Called once INDEX + first-page mods are in MOD_CACHE.
@@ -1497,8 +1655,8 @@ function renderHomeFeatured() {
       ? `<img src="${mod.image}" alt="${mod.name}" class="hpc-thumb-img">`
       : `<div class="hpc-thumb-fallback">${mod.name.charAt(0).toUpperCase()}</div>`;
     return `<div class="home-proj-card" role="button" tabindex="0"
-        onclick="window.location.hash='proiecte/${mod.id}'"
-        onkeydown="if(event.key==='Enter')window.location.hash='proiecte/${mod.id}'">
+        onclick="openProject('${mod.id}')"
+        onkeydown="if(event.key==='Enter')openProject('${mod.id}')">
       <div class="hpc-thumb">${thumbHtml}</div>
       <div class="hpc-info">
         <div class="hpc-name">${mod.name}</div>
@@ -1537,8 +1695,8 @@ function renderHomeSvcTeaser(list) {
       ? `<div class="hsc-price">${svc.currency || '€'}${svc.price}</div>`
       : '';
     return `<div class="home-svc-card" role="button" tabindex="0"
-        onclick="window.location.hash='servicii'"
-        onkeydown="if(event.key==='Enter')window.location.hash='servicii'">
+        onclick="_navTo('servicii');resolveRoute()"
+        onkeydown="if(event.key==='Enter'){_navTo('servicii');resolveRoute()}">
       <div class="hsc-icon">${iconHtml}</div>
       <div class="hsc-info">
         <div class="hsc-name">${svc.name}</div>
@@ -1728,7 +1886,7 @@ async function loadHomeOffer() {
     const title   = _langVal(d, 'title')   || '';
     const desc    = _langVal(d, 'desc')    || '';
     const btnText = _langVal(d, 'btnText') || (window.siteLang === 'ro' ? 'Află mai multe' : 'Learn more');
-    const btnUrl  = d.btnUrl || '#servicii';
+    const btnUrl  = d.btnUrl || '?page=servicii';
     const accent  = d.accentColor || '';
 
     if (!title && !desc) return;
@@ -1768,3 +1926,84 @@ loadSiteSettings().then(() => loadServices());
 loadAbout();
 loadHomeOffer();
 if (localStorage.getItem('fd_cookie_choice') === '1') initAnalytics();
+
+// ── SITEMAP GENERATOR ──────────────────────────────────────────────────────
+// Generates an XML sitemap by combining:
+//   1. Static pages  (?page=proiecte, ?page=servicii, etc.)
+//   2. Live project IDs from Firestore index (?page=proiecte&id=xxx)
+// Usage:  await generateSitemap()  — returns XML string
+//         await generateSitemap({ download: true })  — triggers file download
+//
+// Deploy note: for true SEO crawlability, serve this XML from your hosting
+// at /sitemap.xml (e.g. via a Cloud Function or build step that calls this
+// logic server-side).  For a pure static host, you can run it once and
+// commit the output file.
+
+async function generateSitemap({ download = false } = {}) {
+  const base = window.location.origin + window.location.pathname.replace(/\/+$/, '');
+  const today = new Date().toISOString().split('T')[0];
+
+  // Static pages
+  const staticPages = [
+    { slug: '',                 changefreq: 'weekly',  priority: '1.0' },
+    { slug: 'proiecte',         changefreq: 'weekly',  priority: '0.9' },
+    { slug: 'servicii',         changefreq: 'monthly', priority: '0.8' },
+    { slug: 'despre',           changefreq: 'monthly', priority: '0.7' },
+    { slug: 'confidentialitate',changefreq: 'yearly',  priority: '0.3' },
+    { slug: 'termeni',          changefreq: 'yearly',  priority: '0.3' },
+  ];
+
+  // Build static URLs
+  const urls = staticPages.map(({ slug, changefreq, priority }) => {
+    const loc = slug ? `${base}?page=${slug}` : base;
+    return { loc, changefreq, priority, lastmod: today };
+  });
+
+  // Load project index from Firestore
+  try {
+    const indexDoc = await getDoc(doc(db, 'projects', 'projects'));
+    if (indexDoc.exists()) {
+      const data = indexDoc.data();
+      const publicProjects = Object.entries(data)
+        .filter(([id, entry]) => id !== '_metadata' && typeof entry === 'object' && entry.public === true);
+      publicProjects.forEach(([id]) => {
+        urls.push({
+          loc:        `${base}?page=proiecte&id=${encodeURIComponent(id)}`,
+          changefreq: 'monthly',
+          priority:   '0.8',
+          lastmod:    today,
+        });
+      });
+    }
+  } catch(e) {
+    console.warn('[sitemap] Could not load project index:', e);
+  }
+
+  // Build XML
+  const urlsXml = urls.map(u => `
+  <url>
+    <loc>${u.loc}</loc>
+    <lastmod>${u.lastmod}</lastmod>
+    <changefreq>${u.changefreq}</changefreq>
+    <priority>${u.priority}</priority>
+  </url>`).join('');
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urlsXml}
+</urlset>`;
+
+  if (download) {
+    const blob = new Blob([xml], { type: 'application/xml' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'sitemap.xml';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  }
+
+  return xml;
+}
+
+// Expose for console use: generateSitemap({ download: true })
+window.generateSitemap = generateSitemap;
