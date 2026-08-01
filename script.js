@@ -530,6 +530,7 @@ function goPage(page) {
   }
   window.history.pushState(null, '', url.pathname + url.search);
   currentPage = page;
+  document.title = _projectsTitle(currentPage);
   renderMods();
   preloadPage(currentPage);
 }
@@ -557,7 +558,7 @@ async function loadIndex() {
     preloadPage(currentPage);
     if (_pendingProjectId) { _doOpenProjectFromFirestore(_pendingProjectId); _pendingProjectId = null; }
     if (_pendingPage) {
-      if (_pendingPage > totalPages) { show404(); _pendingPage = null; }
+      if (_pendingPage < 1 || _pendingPage > totalPages) { show404(); _pendingPage = null; }
       else { currentPage = _pendingPage; _pendingPage = null; renderMods(); preloadPage(currentPage); }
     }
   } catch (err) {
@@ -813,6 +814,7 @@ function closeProject() {
   projPage.classList.remove('open');
   setTimeout(() => { backdrop.classList.remove('open'); document.body.style.overflow = ''; }, 300);
   currentMod = null;
+  document.title = _projectsTitle(currentPage);
 }
 
 function handleProjBackdrop(e) {
@@ -833,6 +835,11 @@ const NAV_MAP = {
   home: 'ni-home', products: 'ni-products',
   servicii: 'ni-servicii', about: 'ni-about',
 };
+function _projectsTitle(page) {
+  const base = 'Proiecte · FlorinDev';
+  return (page && page > 1) ? `Proiecte · Pagina ${page} · FlorinDev` : base;
+}
+
 const PAGE_TITLE_MAP = {
   home:      'FlorinDev',
   products:  'Proiecte · FlorinDev',
@@ -884,11 +891,16 @@ function resolveRoute() {
     }
     // ?page=proiecte&pagina=3
     if (paginaRaw) {
-      const pg = parseInt(paginaRaw) || 1;
-      if (INDEX.length > 0 && pg > totalPages) { show404(); return; }
-      currentPage = Math.max(1, Math.min(pg, totalPages || 1));
-      if (INDEX.length > 0) { renderMods(); preloadPage(currentPage); }
-      else _pendingPage = currentPage;
+      const pg = parseInt(paginaRaw, 10);
+      if (!Number.isInteger(pg) || pg < 1) { show404(); return; }
+      if (INDEX.length > 0) {
+        if (pg > totalPages) { show404(); return; }
+        currentPage = pg;
+        renderMods(); preloadPage(currentPage);
+      } else {
+        // Store raw value — validated against real totalPages once index loads
+        _pendingPage = pg;
+      }
       return;
     }
     currentPage = 1;
@@ -902,7 +914,8 @@ function resolveRoute() {
     return;
   }
 
-  const pageId = QUERY_PAGE_MAP[sec] || 'home';
+  const pageId = QUERY_PAGE_MAP[sec];
+  if (pageId === undefined) { show404(); return; }
   _activatePage(pageId);
 }
 
@@ -927,7 +940,7 @@ function _activatePage(pageId) {
   if (navId) document.getElementById(navId).classList.add('active');
   if (pageId === 'privacy') loadLegalPage('privacy');
   if (pageId === 'terms')   loadLegalPage('terms');
-  document.title = PAGE_TITLE_MAP[pageId] || 'FlorinDev';
+  document.title = (pageId === 'products' ? _projectsTitle(currentPage) : PAGE_TITLE_MAP[pageId]) || 'FlorinDev';
 }
 
 function _closeProjectSilent() {
@@ -935,7 +948,7 @@ function _closeProjectSilent() {
   document.getElementById('proj-backdrop').classList.remove('open');
   document.body.style.overflow = '';
   currentMod = null;
-  document.title = PAGE_TITLE_MAP['products'];
+  document.title = _projectsTitle(currentPage);
 }
 
 window.addEventListener('popstate', () => { resolveRoute(); });
@@ -1013,6 +1026,7 @@ function show404() {
   const el = document.getElementById('page-404');
   if (el) el.classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.title = '404 · FlorinDev';
 }
 
 function showPrivate(modId) {
