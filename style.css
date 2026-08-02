@@ -885,6 +885,108 @@ nav {
 .desc-float-collapse:hover { opacity: .8; }
 .desc-float-collapse svg { width: 14px; height: 14px; flex-shrink: 0; }
 
+/* ── DESCRIPTION TOC — slides in on native scrollbar hold ── */
+.desc-layout { display: contents; }
+
+.dtoc-wrap {
+  position: fixed;
+  width: 260px;
+  z-index: 2100;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* Chapter list panel */
+.dtoc-chapters {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 260px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 0;
+  background: rgba(10,10,12,.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-left: 1px solid rgba(255,255,255,.08);
+  opacity: 0;
+  transform: translateX(12px);
+  pointer-events: none;
+  transition: opacity .16s, transform .16s cubic-bezier(.4,0,.2,1);
+  scrollbar-width: none;
+}
+.dtoc-chapters::-webkit-scrollbar { display: none; }
+.dtoc-wrap.dtoc-visible .dtoc-chapters {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+/* Animated highlight marker behind active row */
+.dtoc-marker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: rgba(255,255,255,.05);
+  border-left: 2px solid var(--accent, #6366f1);
+  border-radius: 0 6px 6px 0;
+  transition: top .12s cubic-bezier(.4,0,.2,1), height .12s cubic-bezier(.4,0,.2,1);
+  pointer-events: none;
+}
+
+/* Individual chapter row */
+.dtoc-chapter {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 8px 16px 8px 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: background .12s;
+  min-width: 0;
+  z-index: 1;
+}
+.dtoc-chapter:hover { background: rgba(255,255,255,.04); }
+
+/* Chapter dot */
+.dtoc-ch-dot {
+  flex-shrink: 0;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.18);
+  transition: background .15s, transform .15s;
+}
+.dtoc-h2 .dtoc-ch-dot { width: 5px; height: 5px; }
+.dtoc-h3 .dtoc-ch-dot { width: 4px; height: 4px; opacity: .5; }
+.dtoc-chapter.dtoc-active .dtoc-ch-dot {
+  background: var(--accent, #6366f1);
+  transform: scale(1.3);
+}
+
+/* Chapter label */
+.dtoc-ch-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255,255,255,.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color .12s;
+  font-family: 'Inter', sans-serif;
+  line-height: 1.4;
+}
+.dtoc-h2 .dtoc-ch-label { font-size: 12px; padding-left: 8px; }
+.dtoc-h3 .dtoc-ch-label { font-size: 11.5px; padding-left: 18px; color: rgba(255,255,255,.28); }
+.dtoc-chapter.dtoc-active .dtoc-ch-label { color: #fff; font-weight: 600; }
+.dtoc-chapter:hover .dtoc-ch-label { color: rgba(255,255,255,.8); }
+
+@media (max-width: 640px) { .dtoc-wrap { display: none !important; } }
+
 /* MD prose inside project description */
 .proj-desc .md-prose,
 .proj-desc-inner.md-prose {

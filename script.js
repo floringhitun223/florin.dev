@@ -937,51 +937,225 @@ function _buildMarkedRenderer() {
   return renderer;
 }
 
+let _markedReady = false;
 function _markedParse(text) {
-  marked.setOptions({ breaks: true, gfm: true });
-  marked.use({ renderer: _buildMarkedRenderer() });
+  if (!_markedReady) {
+    marked.setOptions({ breaks: true, gfm: true });
+    marked.use({ renderer: _buildMarkedRenderer() });
+    _markedReady = true;
+  }
   return marked.parse(text);
 }
+
 
 const DESC_COLLAPSE_HEIGHT = 120;
 let _descCollapseScroll = null; // cleanup fn for scroll listener
 
+// ── DESCRIPTION TOC — slides in on native scrollbar hold ─────────────────
+
+function _buildDescToc(inner, projPage) {
+  // Pick the heading level with the most entries (h1 > h2 > h3 as tiebreaker)
+  const allHeadings = [...inner.querySelectorAll('h1, h2, h3')];
+  const counts = { H1: 0, H2: 0, H3: 0 };
+  allHeadings.forEach(h => { counts[h.tagName] = (counts[h.tagName] || 0) + 1; });
+  const topTag = ['H1', 'H2', 'H3'].reduce((best, tag) =>
+    counts[tag] > counts[best] ? tag : best, 'H1') || null;
+  const headings = counts[topTag] > 0 ? allHeadings.filter(h => h.tagName === topTag) : [];
+  if (headings.length < 1) return null;
+
+  headings.forEach((h, i) => { if (!h.id) h.id = 'desc-h-' + i; });
+
+  // ── DOM
+  const wrap = document.createElement('div');
+  wrap.className = 'dtoc-wrap';
+
+  const chapterList = document.createElement('div');
+  chapterList.className = 'dtoc-chapters';
+
+  const marker = document.createElement('div');
+  marker.className = 'dtoc-marker';
+  chapterList.appendChild(marker);
+
+  const items = headings.map((h) => {
+    const level = parseInt(h.tagName[1]);
+    const text  = h.textContent.trim().replace(/^#+\s*/, '');
+    const row   = document.createElement('button');
+    row.className = 'dtoc-chapter dtoc-h' + level;
+    row.title     = text;
+    row.innerHTML = '<span class="dtoc-ch-dot"></span><span class="dtoc-ch-label">' + text + '</span>';
+    row.addEventListener('mousedown', e => {
+      const pageRect = projPage.getBoundingClientRect();
+      const headRect = h.getBoundingClientRect();
+      projPage.scrollBy({ top: headRect.top - pageRect.top - 20 });
+      e.preventDefault();
+    });
+    chapterList.appendChild(row);
+    return { row, heading: h };
+  });
+
+  wrap.appendChild(chapterList);
+  document.body.appendChild(wrap);
+
+  // ── Cached heading offsets relative to projPage scrollTop=0 — no live getBCR on scroll
+  let _headingOffsets = [];
+  let _itemH = 0;
+  const _cacheOffsets = () => {
+    const pageTop = projPage.getBoundingClientRect().top - projPage.scrollTop;
+    _headingOffsets = headings.map(h => h.getBoundingClientRect().top - pageTop);
+    _itemH = items[0]?.row.offsetHeight || 32;
+  };
+
+  // ── POSITION — flush left of native scrollbar, full proj-page height
+  let _rafRepo = 0;
+  const reposition = () => {
+    cancelAnimationFrame(_rafRepo);
+    _rafRepo = requestAnimationFrame(() => {
+      const pr  = projPage.getBoundingClientRect();
+      const sbW = projPage.offsetWidth - projPage.clientWidth;
+      wrap.style.right  = (window.innerWidth - pr.right + sbW) + 'px';
+      wrap.style.top    = pr.top + 'px';
+      wrap.style.height = pr.height + 'px';
+      _cacheOffsets();
+    });
+  };
+  reposition();
+
+  // ── UPDATE active chapter — runs inside a continuous rAF loop while dragging
+  // No cancel-on-scroll: scroll fires faster than rAF during thumb drag,
+  // so we just let the loop tick every frame and read scrollTop (cheap, no layout).
+  let _rafUpdate = 0;
+  let _lastActive = -1;
+  let _nativeDragging = false;
+
+  const _tick = () => {
+    const atBottom = projPage.scrollTop + projPage.clientHeight >= projPage.scrollHeight - 4;
+    let activeIdx;
+    if (atBottom) {
+      activeIdx = headings.length - 1;
+    } else {
+      const refY = projPage.scrollTop + 60;
+      activeIdx = 0;
+      for (let i = _headingOffsets.length - 1; i >= 0; i--) {
+        if (_headingOffsets[i] <= refY) { activeIdx = i; break; }
+      }
+    }
+
+    if (activeIdx !== _lastActive) {
+      _lastActive = activeIdx;
+      items.forEach((it, i) => it.row.classList.toggle('dtoc-active', i === activeIdx));
+      const activeEl = items[activeIdx]?.row;
+      if (activeEl) {
+        chapterList.scrollTop = activeEl.offsetTop - chapterList.clientHeight / 2 + _itemH / 2;
+        marker.style.top    = activeEl.offsetTop + 'px';
+        marker.style.height = _itemH + 'px';
+      }
+    }
+
+    if (_nativeDragging) _rafUpdate = requestAnimationFrame(_tick);
+  };
+
+  // ── DETECT native scrollbar mousedown
+  const onDocMouseDown = e => {
+    const pr  = projPage.getBoundingClientRect();
+    const sbL = pr.left + projPage.clientWidth;
+    if (e.clientX >= sbL && e.clientX <= pr.right && e.clientY >= pr.top && e.clientY <= pr.bottom) {
+      _nativeDragging = true;
+      wrap.classList.add('dtoc-visible');
+      cancelAnimationFrame(_rafUpdate);
+      _rafUpdate = requestAnimationFrame(_tick);
+    }
+  };
+
+  const onDocMouseUp = () => {
+    if (!_nativeDragging) return;
+    _nativeDragging = false;
+    wrap.classList.remove('dtoc-visible');
+  };
+
+  document.addEventListener('mousedown', onDocMouseDown);
+  document.addEventListener('mouseup',   onDocMouseUp);
+  window.addEventListener('resize', reposition);
+
+  wrap._cleanup = () => {
+    cancelAnimationFrame(_rafRepo);
+    cancelAnimationFrame(_rafUpdate);
+    document.removeEventListener('mousedown', onDocMouseDown);
+    document.removeEventListener('mouseup',   onDocMouseUp);
+    window.removeEventListener('resize', reposition);
+    wrap.remove();
+  };
+  return wrap;
+}
+
 function _renderDesc(el, raw) {
-  // Tear down previous scroll listener if any
   if (_descCollapseScroll) { _descCollapseScroll(); _descCollapseScroll = null; }
 
   if (!raw) { el.innerHTML = ''; return; }
   const html = _markedParse(raw);
   el.innerHTML = `<div class="proj-desc-inner md-prose">${html}</div>`;
+
   requestAnimationFrame(() => {
     const inner = el.querySelector('.proj-desc-inner');
     if (!inner) return;
-    const full = inner.scrollHeight;
-    if (full <= DESC_COLLAPSE_HEIGHT + 24) return;
-    inner.style.maxHeight = DESC_COLLAPSE_HEIGHT + 'px';
-    inner.classList.add('desc-collapsed');
 
-    // Inline toggle button (Show more / Show less)
+    const full = inner.scrollHeight;
+    const needsCollapse = full > DESC_COLLAPSE_HEIGHT + 24;
+    let _tocWrap = null;
+    const projPage = document.getElementById('proj-page');
+
+    if (needsCollapse) {
+      inner.style.maxHeight = DESC_COLLAPSE_HEIGHT + 'px';
+      inner.classList.add('desc-collapsed');
+    }
+
     const toggle = document.createElement('button');
     toggle.className = 'desc-toggle';
     toggle.textContent = t('descToggleMore');
 
     let expanded = false;
-    const projPage = document.getElementById('proj-page');
 
-    // Float button lives on body to escape proj-page's transform+overflow:hidden trap
     const floatBtn = document.createElement('button');
     floatBtn.className = 'desc-float-collapse';
     floatBtn.innerHTML = `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,9 7,5 11,9"/></svg> ${t('descToggleLess')}`;
     floatBtn.style.display = 'none';
     document.body.appendChild(floatBtn);
 
-    // Center button horizontally over the panel (called lazily on first show, panel may still be animating at init)
-    const positionBtn = () => {
+    const positionFloatBtn = () => {
+      if (!expanded) return;
       const pr = projPage.getBoundingClientRect();
       floatBtn.style.left = Math.round(pr.left + pr.width / 2) + 'px';
     };
-    window.addEventListener('resize', positionBtn);
+    window.addEventListener('resize', positionFloatBtn);
+
+    let _rafFloat = 0;
+    const updateFloatVisibility = () => {
+      cancelAnimationFrame(_rafFloat);
+      _rafFloat = requestAnimationFrame(() => {
+        if (!expanded) { floatBtn.style.display = 'none'; return; }
+        const descRect = el.getBoundingClientRect();
+        const show = descRect.bottom < 80;
+        floatBtn.style.display = show ? '' : 'none';
+        if (show) positionFloatBtn();
+      });
+    };
+
+    projPage.addEventListener('scroll', updateFloatVisibility, { passive: true });
+
+    _descCollapseScroll = () => {
+      projPage.removeEventListener('scroll', updateFloatVisibility);
+      window.removeEventListener('resize', positionFloatBtn);
+      if (_tocWrap) { _tocWrap._cleanup?.(); _tocWrap = null; }
+      floatBtn.remove();
+    };
+
+    const showToc = () => {
+      if (_tocWrap) return;
+      _tocWrap = _buildDescToc(inner, projPage);
+    };
+
+    const hideToc = () => {
+      if (_tocWrap) { _tocWrap._cleanup?.(); _tocWrap = null; }
+    };
 
     const collapse = () => {
       expanded = false;
@@ -989,38 +1163,30 @@ function _renderDesc(el, raw) {
       inner.classList.add('desc-collapsed');
       toggle.textContent = t('descToggleMore');
       floatBtn.style.display = 'none';
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      hideToc();
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     };
 
-    const onScroll = () => {
-      if (!expanded) { floatBtn.style.display = 'none'; return; }
-      // Show once scrolled past the hero+desc header area
-      floatBtn.style.display = projPage.scrollTop > 250 ? '' : 'none';
-    };
-
-    projPage.addEventListener('scroll', onScroll, { passive: true });
-    _descCollapseScroll = () => {
-      projPage.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', positionBtn);
+    if (needsCollapse) {
+      toggle.addEventListener('click', () => {
+        expanded = !expanded;
+        if (expanded) {
+          inner.style.maxHeight = full + 'px';
+          inner.classList.remove('desc-collapsed');
+          toggle.textContent = t('descToggleLess');
+          showToc();
+          updateFloatVisibility();
+        } else {
+          collapse();
+        }
+      });
+      floatBtn.addEventListener('click', collapse);
+      el.appendChild(toggle);
+    } else {
+      // No collapse needed — show TOC right away
       floatBtn.remove();
-    };
-
-    toggle.addEventListener('click', () => {
-      expanded = !expanded;
-      if (expanded) {
-        inner.style.maxHeight = full + 'px';
-        inner.classList.remove('desc-collapsed');
-        toggle.textContent = t('descToggleLess');
-        positionBtn();
-        onScroll();
-      } else {
-        collapse();
-      }
-    });
-
-    floatBtn.addEventListener('click', collapse);
-
-    el.appendChild(toggle);
+      showToc();
+    }
   });
 }
 
