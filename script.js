@@ -201,6 +201,20 @@ const STRINGS = {
     'cookie-decline': 'Refuz',
     'cookie-accept':  'Accept',
     'cookie-link':    'Politică de confidențialitate',
+    'tab-versions':   'Versiuni',
+    'tab-code':       'Cod',
+    'tab-license':    'Licență',
+    'code-repo':      'Depozit cod',
+    'code-files':     'Fișiere în depozit',
+    'code-btn':       'Cod',
+    'code-no-repo':   'Nu există un depozit de cod configurat.',
+    'code-loading':   'Se încarcă fișierele...',
+    'code-error':     'Nu s-au putut încărca fișierele depozitului.',
+    'license-none':   'Nicio licență specificată pentru acest proiect.',
+    'license-loading':'Se încarcă licența...',
+    'license-error':  'Nu s-a putut încărca licența.',
+    'cat-all':        'Toate',
+    'cat-filter':     'Categorie',
   },
   eng: {
     // JS-generated strings
@@ -278,6 +292,20 @@ const STRINGS = {
     'cookie-decline': 'Decline',
     'cookie-accept':  'Accept',
     'cookie-link':    'Privacy Policy',
+    'tab-versions':   'Versions',
+    'tab-code':       'Code',
+    'tab-license':    'License',
+    'code-repo':      'Repository',
+    'code-files':     'Repository files',
+    'code-btn':       'Code',
+    'code-no-repo':   'No code repository configured for this project.',
+    'code-loading':   'Loading files...',
+    'code-error':     'Could not load repository files.',
+    'license-none':   'No license specified for this project.',
+    'license-loading':'Loading license...',
+    'license-error':  'Could not load license.',
+    'cat-all':        'All',
+    'cat-filter':     'Category',
   },
 };
 
@@ -311,6 +339,12 @@ let MOD_CACHE   = {};
 let currentMod  = null;
 let currentPage = 1;
 let totalPages  = 1;
+
+let _viewMode    = 'list'; // 'list' | 'grid'
+let _sortOrder   = 'desc'; // 'desc' = New first | 'asc' = Old first
+let _sortedIndex = [];         // current sorted copy of INDEX
+let _activeCat   = '';         // '' = all; otherwise category key
+let _categories  = [];         // [{ key, ro, en }] from index metadata
 
 // ── RELATIVE TIME ─────────────────────────────────────────────────────────
 function relativeTime(ts) {
@@ -421,11 +455,15 @@ function firestoreDocToMod(docId, data) {
   return {
     id: docId, name: _langVal(data, 'Name') || data.Name || docId, dev: shortDesc, year,
     authors, status, downloadUrl,
-    description: _langVal(data, 'desc') || '', image: data.image || '',
+    description: _langVal(data, 'desc') || '', image: data.image || '', imageHero: data.imageHero || '',
     marks,
     aiUsed: marks.length ? hasAiMark : legacyAi,
     aiDisclaimer: data.ai_disclaimer || 'Voci generate prin AI (voice cloning)',
     versions,
+    category:    data.category || null,   // { key, ro, en } or null
+    codeEnabled: !!data.codeEnabled,
+    codeRepo:    data.codeRepo || '',
+    licenseKey:  data.licenseKey || '',
   };
 }
 
@@ -448,15 +486,161 @@ function coverHeroBg(mod) {
 }
 
 // ── RENDER MOD LIST ────────────────────────────────────────────────────────
+// ── PROJECTS TOOLBAR (sort + view toggle) ─────────────────────────────────
+function _ensureProjectsToolbar() {
+  if (document.getElementById('proj-toolbar')) return;
+  const wrap = document.querySelector('.mod-table-wrap');
+  if (!wrap) return;
+
+  const isRo = window.siteLang === 'ro';
+  const toolbar = document.createElement('div');
+  toolbar.id = 'proj-toolbar';
+  toolbar.className = 'proj-toolbar';
+  toolbar.innerHTML = `
+    <div class="pt-sort">
+      <button class="pt-sort-btn pt-active" id="pt-new" onclick="_setSort('desc')" title="${isRo ? 'Cele mai noi' : 'Newest first'}">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="2" y1="3" x2="11" y2="3"/><line x1="2" y1="7" x2="8" y2="7"/><line x1="2" y1="11" x2="5" y2="11"/></svg>
+        ${isRo ? 'Nou' : 'New'}
+      </button>
+      <button class="pt-sort-btn" id="pt-old" onclick="_setSort('asc')" title="${isRo ? 'Cele mai vechi' : 'Oldest first'}">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="2" y1="3" x2="5" y2="3"/><line x1="2" y1="7" x2="8" y2="7"/><line x1="2" y1="11" x2="11" y2="11"/></svg>
+        ${isRo ? 'Vechi' : 'Old'}
+      </button>
+    </div>
+    <div class="pt-view">
+      <button class="pt-view-btn pt-active" id="pt-list" onclick="_setView('list')" title="${isRo ? 'Listă' : 'List view'}">
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="2" y1="3.5" x2="13" y2="3.5"/><line x1="2" y1="7.5" x2="13" y2="7.5"/><line x1="2" y1="11.5" x2="13" y2="11.5"/></svg>
+      </button>
+      <button class="pt-view-btn" id="pt-grid" onclick="_setView('grid')" title="${isRo ? 'Grilă' : 'Grid view'}">
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="8.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="8.5" width="5" height="5" rx="1"/><rect x="8.5" y="8.5" width="5" height="5" rx="1"/></svg>
+      </button>
+    </div>`;
+  wrap.parentNode.insertBefore(toolbar, wrap);
+}
+
+function _setSort(order) {
+  if (_sortOrder === order) return;
+  _sortOrder = order;
+  document.getElementById('pt-new')?.classList.toggle('pt-active', order === 'desc');
+  document.getElementById('pt-old')?.classList.toggle('pt-active', order === 'asc');
+  _applySort();
+  currentPage = 1;
+  totalPages = Math.max(1, Math.ceil(_sortedIndex.length / PAGE_SIZE));
+  renderMods();
+  // Only fetch the items on new page 1 that aren't in MOD_CACHE yet
+  preloadPage(currentPage);
+}
+window._setSort = _setSort;
+
+function _setView(mode) {
+  if (_viewMode === mode) return;
+  _viewMode = mode;
+  document.getElementById('pt-list')?.classList.toggle('pt-active', mode === 'list');
+  document.getElementById('pt-grid')?.classList.toggle('pt-active', mode === 'grid');
+  const tableHead = document.querySelector('.mod-table-head');
+  if (tableHead) tableHead.style.display = mode === 'grid' ? 'none' : '';
+  renderMods();
+  // Ensure current page is loaded (items already cached = no extra Firestore calls)
+  preloadPage(currentPage);
+}
+window._setView = _setView;
+
+function _applySort() {
+  let src = [...INDEX];
+  // Apply category filter (uses MOD_CACHE which may be partial — that's fine,
+  // uncached items default to "no category" and will appear under "All")
+  if (_activeCat) {
+    src = src.filter(entry => {
+      const mod = MOD_CACHE[entry.id];
+      return mod ? (mod.category?.key === _activeCat) : false;
+    });
+  }
+  _sortedIndex = src.sort((a, b) =>
+    _sortOrder === 'asc' ? a.timestamp - b.timestamp : b.timestamp - a.timestamp
+  );
+}
+
+function _setCat(key) {
+  _activeCat = key;
+  // Update chip UI
+  document.querySelectorAll('.pcat-chip').forEach(el => {
+    el.classList.toggle('active', el.dataset.catKey === key);
+  });
+  _applySort();
+  currentPage = 1;
+  totalPages = Math.max(1, Math.ceil(_sortedIndex.length / PAGE_SIZE));
+  renderMods();
+  preloadPage(currentPage);
+}
+window._setCat = _setCat;
+
+// Called after MOD_CACHE is populated enough to know categories.
+// Collects distinct category objects from cached mods and renders the filter row.
+function _maybeRenderCatFilter() {
+  const filterEl = document.getElementById('proj-cat-filter');
+  const chipsEl  = document.getElementById('proj-cat-chips');
+  if (!filterEl || !chipsEl) return;
+
+  // Gather categories from all cached mods (preserving insert order)
+  const seen = new Map();
+  INDEX.forEach(entry => {
+    const mod = MOD_CACHE[entry.id];
+    if (mod?.category?.key && !seen.has(mod.category.key)) {
+      seen.set(mod.category.key, mod.category);
+    }
+  });
+
+  if (seen.size === 0) {
+    filterEl.style.display = 'none';
+    return;
+  }
+
+  _categories = [...seen.values()];
+  filterEl.style.display = '';
+
+  const isRo = window.siteLang === 'ro';
+  const allLabel = t('cat-all');
+  let html = `<button class="pcat-chip${_activeCat === '' ? ' active' : ''}" data-cat-key="" onclick="_setCat('')">${allLabel}</button>`;
+  _categories.forEach(cat => {
+    const label = isRo ? (cat.ro || cat.en || cat.key) : (cat.en || cat.ro || cat.key);
+    html += `<button class="pcat-chip${_activeCat === cat.key ? ' active' : ''}" data-cat-key="${cat.key}" onclick="_setCat('${cat.key}')">${label}</button>`;
+  });
+  chipsEl.innerHTML = html;
+}
+
 function renderMods() {
+  _ensureProjectsToolbar();
+
+  // Keep sorted index in sync
+  if (!_sortedIndex.length && INDEX.length) _applySort();
+  const source = _sortedIndex.length ? _sortedIndex : INDEX;
+
   const table = document.getElementById('mod-table');
   table.innerHTML = '';
+
+  // Toggle column header visibility
+  const tableHead = document.querySelector('.mod-table-head');
+  if (tableHead) tableHead.style.display = _viewMode === 'grid' ? 'none' : '';
+
   const pageItems = getPageItems(currentPage);
   if (pageItems.length === 0) {
     table.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text-3);font-size:13px">${t('nuExistaProiecte')}</div>`;
     renderPagination();
     return;
   }
+
+  if (_viewMode === 'grid') {
+    _renderGrid(table, pageItems);
+  } else {
+    _renderList(table, pageItems);
+  }
+
+  renderPagination();
+}
+
+// ── LIST RENDER ───────────────────────────────────────────────────────────
+function _renderList(table, pageItems) {
+  table.className = 'mod-table-list'; // reset from grid class if toggled
   pageItems.forEach(entry => {
     const row = document.createElement('div');
     row.className = 'mod-row';
@@ -490,13 +674,94 @@ function renderMods() {
       </div>`;
     table.appendChild(row);
   });
-  renderPagination();
+}
+
+// ── GRID RENDER ───────────────────────────────────────────────────────────
+// Fill N cards gap-lessly using CSS Grid with auto-fit + 1 wider "featured" card
+// when count doesn't divide evenly into equal rows.
+function _renderGrid(table, pageItems) {
+  const count = pageItems.length;
+
+  // Compute column count from real container width
+  const wrap = document.querySelector('.mod-table-wrap');
+  const containerW = wrap ? wrap.offsetWidth : 900;
+  const cols = containerW >= 720 ? 3 : (containerW >= 480 ? 2 : 1);
+
+  // How many cards are in the last (possibly incomplete) row
+  const lastRowCount = count % cols === 0 ? cols : count % cols;
+  const lastRowStart = count - lastRowCount; // index of first card in last row
+
+  // Each last-row orphan spans (cols / lastRowCount) columns so they fill the row.
+  // Only works cleanly when cols is divisible by lastRowCount.
+  // e.g. 10 items, 3 cols → last row has 1 card → it spans 3 (full width is ugly for 1)
+  //      10 items, 3 cols → last row has 1 card:
+  //        if lastRowCount === 1 → span = cols (full row, normal card, not "wide" hero)
+  //        if lastRowCount === 2 → each spans 1 (already even, no action needed since cols=3
+  //            but we give each span=1 which is default anyway)
+  // Better rule: distribute cols evenly among orphan cards.
+  //   spanPerOrphan = Math.floor(cols / lastRowCount)
+  //   remainder     = cols % lastRowCount  → first `remainder` cards get +1 span
+  const isLastRowFull = lastRowCount === cols;
+  const spanBase = isLastRowFull ? 1 : Math.floor(cols / lastRowCount);
+  const spanRem  = isLastRowFull ? 0 : cols % lastRowCount;
+
+  table.className = 'mod-grid';
+  table.style.setProperty('--mg-cols', cols);
+  table.setAttribute('data-cols', cols);
+
+  pageItems.forEach((entry, i) => {
+    const mod = MOD_CACHE[entry.id];
+    const name     = mod ? mod.name     : entry.id;
+    const dev      = mod ? mod.dev      : '';
+    const year     = mod ? mod.year     : '';
+    const verCount = mod ? mod.versions.length : '–';
+    const marksHtml = mod && mod.marks?.length
+      ? `<div class="mgc-marks">${renderMarksHtml(mod.marks, { compact: true, limit: 2 })}</div>`
+      : '';
+
+    // Hero: use imageHero (landscape banner) in grid, fall back to favicon, then gradient
+    const heroSrc = mod && (mod.imageHero || mod.image);
+    const heroInner = heroSrc
+      ? `<img src="${heroSrc}" alt="${name}" class="mgc-hero-img">`
+      : (mod
+          ? `<div class="mgc-hero-fallback" style="background:${coverHeroBg(mod)}">${name.charAt(0).toUpperCase()}</div>`
+          : `<div class="mgc-hero-fallback"></div>`);
+
+    // Compute span for this card
+    let span = 1;
+    if (!isLastRowFull && i >= lastRowStart) {
+      const posInLastRow = i - lastRowStart;
+      span = spanBase + (posInLastRow < spanRem ? 1 : 0);
+    }
+
+    const card = document.createElement('div');
+    card.className = 'mgc';
+    if (span > 1) card.style.gridColumn = `span ${span}`;
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.onclick   = () => openProject(entry.id);
+    card.onkeydown = e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); openProject(entry.id); } };
+
+    card.innerHTML = `
+      <div class="mgc-hero">${heroInner}</div>
+      <div class="mgc-body">
+        <div class="mgc-name">${name}</div>
+        <div class="mgc-dev">${dev}</div>
+        ${marksHtml}
+        <div class="mgc-footer">
+          <span class="mgc-ver"><strong>${verCount}</strong> ${t('versiuni')}</span>
+          ${year ? `<span class="mgc-year">${year}</span>` : ''}
+        </div>
+      </div>`;
+    table.appendChild(card);
+  });
 }
 
 // ── PAGINATION ─────────────────────────────────────────────────────────────
 function getPageItems(page) {
+  const source = _sortedIndex.length ? _sortedIndex : INDEX;
   const start = (page - 1) * PAGE_SIZE;
-  return INDEX.slice(start, start + PAGE_SIZE);
+  return source.slice(start, start + PAGE_SIZE);
 }
 function renderPagination() {
   let existing = document.getElementById('mod-pagination');
@@ -552,7 +817,8 @@ async function loadIndex() {
         return { id, timestamp: typeof ts === 'number' ? ts : (parseInt(ts) || 0), public: entry.public };
       })
       .sort((a, b) => b.timestamp - a.timestamp);
-    totalPages = Math.max(1, Math.ceil(INDEX.length / PAGE_SIZE));
+    _applySort();
+    totalPages = Math.max(1, Math.ceil(_sortedIndex.length / PAGE_SIZE));
     renderMods();
     renderHomeStats({});   // render with computed stats immediately
     preloadPage(currentPage);
@@ -581,6 +847,7 @@ async function preloadPage(page) {
       if (d.exists()) MOD_CACHE[entry.id] = firestoreDocToMod(entry.id, d.data());
     } catch(e) { console.warn('Could not load mod', entry.id, e); }
   }));
+  _maybeRenderCatFilter();
   renderMods();
   if (page === 1) { renderHomeFeatured(); playTerminalAnim(); }
 }
@@ -677,7 +944,12 @@ function _markedParse(text) {
 }
 
 const DESC_COLLAPSE_HEIGHT = 120;
+let _descCollapseScroll = null; // cleanup fn for scroll listener
+
 function _renderDesc(el, raw) {
+  // Tear down previous scroll listener if any
+  if (_descCollapseScroll) { _descCollapseScroll(); _descCollapseScroll = null; }
+
   if (!raw) { el.innerHTML = ''; return; }
   const html = _markedParse(raw);
   el.innerHTML = `<div class="proj-desc-inner md-prose">${html}</div>`;
@@ -688,24 +960,241 @@ function _renderDesc(el, raw) {
     if (full <= DESC_COLLAPSE_HEIGHT + 24) return;
     inner.style.maxHeight = DESC_COLLAPSE_HEIGHT + 'px';
     inner.classList.add('desc-collapsed');
+
+    // Inline toggle button (Show more / Show less)
     const toggle = document.createElement('button');
     toggle.className = 'desc-toggle';
     toggle.textContent = t('descToggleMore');
+
     let expanded = false;
+    const projPage = document.getElementById('proj-page');
+
+    // Float button lives on body to escape proj-page's transform+overflow:hidden trap
+    const floatBtn = document.createElement('button');
+    floatBtn.className = 'desc-float-collapse';
+    floatBtn.innerHTML = `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,9 7,5 11,9"/></svg> ${t('descToggleLess')}`;
+    floatBtn.style.display = 'none';
+    document.body.appendChild(floatBtn);
+
+    // Center button horizontally over the panel (called lazily on first show, panel may still be animating at init)
+    const positionBtn = () => {
+      const pr = projPage.getBoundingClientRect();
+      floatBtn.style.left = Math.round(pr.left + pr.width / 2) + 'px';
+    };
+    window.addEventListener('resize', positionBtn);
+
+    const collapse = () => {
+      expanded = false;
+      inner.style.maxHeight = DESC_COLLAPSE_HEIGHT + 'px';
+      inner.classList.add('desc-collapsed');
+      toggle.textContent = t('descToggleMore');
+      floatBtn.style.display = 'none';
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    const onScroll = () => {
+      if (!expanded) { floatBtn.style.display = 'none'; return; }
+      // Show once scrolled past the hero+desc header area
+      floatBtn.style.display = projPage.scrollTop > 250 ? '' : 'none';
+    };
+
+    projPage.addEventListener('scroll', onScroll, { passive: true });
+    _descCollapseScroll = () => {
+      projPage.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', positionBtn);
+      floatBtn.remove();
+    };
+
     toggle.addEventListener('click', () => {
       expanded = !expanded;
-      if (expanded) { inner.style.maxHeight = full + 'px'; inner.classList.remove('desc-collapsed'); toggle.textContent = t('descToggleLess'); }
-      else { inner.style.maxHeight = DESC_COLLAPSE_HEIGHT + 'px'; inner.classList.add('desc-collapsed'); toggle.textContent = t('descToggleMore'); }
+      if (expanded) {
+        inner.style.maxHeight = full + 'px';
+        inner.classList.remove('desc-collapsed');
+        toggle.textContent = t('descToggleLess');
+        positionBtn();
+        onScroll();
+      } else {
+        collapse();
+      }
     });
+
+    floatBtn.addEventListener('click', collapse);
+
     el.appendChild(toggle);
   });
+}
+
+// ── PROJECT PAGE TABS ─────────────────────────────────────────────────────
+let _currentProjTab = 'versions';
+
+function switchProjTab(tab) {
+  _currentProjTab = tab;
+  ['versions', 'code', 'license'].forEach(id => {
+    const btn   = document.getElementById('ptab-' + id);
+    const panel = document.getElementById('proj-panel-' + id);
+    if (btn)   btn.classList.toggle('active', id === tab);
+    if (panel) panel.style.display = id === tab ? '' : 'none';
+  });
+  // Lazy-load on first open
+  const m = currentMod;
+  if (!m) return;
+  if (tab === 'code'    && !document.getElementById('proj-code-panel').__loaded)    _loadCodePanel(m);
+  if (tab === 'license' && !document.getElementById('proj-license-panel').__loaded) _loadLicensePanel(m);
+}
+window.switchProjTab = switchProjTab;
+
+// ── GITHUB REPO FILE LISTING ──────────────────────────────────────────────
+async function _loadCodePanel(m) {
+  const el = document.getElementById('proj-code-panel');
+  if (!el || !m.codeRepo) {
+    if (el) el.innerHTML = `<div class="proj-tab-empty">${t('code-no-repo')}</div>`;
+    el.__loaded = true;
+    return;
+  }
+  el.__loaded = true;
+  el.innerHTML = `<div class="proj-tab-loading">${t('code-loading')}</div>`;
+
+  // Extract owner/repo from GitHub URL
+  const match = m.codeRepo.match(/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/.*)?$/);
+  if (!match) {
+    el.innerHTML = `<div class="proj-tab-empty">${t('code-error')}</div>`;
+    return;
+  }
+  const [, owner, repo] = match;
+  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/`;
+
+  try {
+    const res  = await fetch(apiUrl, { headers: { Accept: 'application/vnd.github.v3+json' } });
+    const data = await res.json();
+    if (!Array.isArray(data)) throw new Error('bad response');
+
+    const files = data.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    const folderIcon = `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1 3h5l1.5 1.5H13V11H1z"/></svg>`;
+    const fileIcon   = `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 1h7l3 3v9H2z"/><path d="M9 1v3h3"/></svg>`;
+    const dlIcon     = `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="6,2 6,8"/><polyline points="3,6 6,9 9,6"/><line x1="2" y1="10.5" x2="10" y2="10.5"/></svg>`;
+
+    // Try main branch first, then master
+    const codeZipUrl = `https://github.com/${owner}/${repo}/archive/refs/heads/main.zip`;
+
+    const fileCount = files.length;
+    const rows = files.map(f => {
+      const icon  = f.type === 'dir' ? folderIcon : fileIcon;
+      const dlBtn = f.type !== 'dir' && f.download_url
+        ? `<a class="gh-file-dl" href="${f.download_url}" download rel="noopener" title="${t('descarca')}">${dlIcon}</a>`
+        : '';
+      const size  = f.type !== 'dir' && f.size ? `<span class="gh-file-size">${_fmtSize(f.size)}</span>` : '';
+      return `<div class="gh-file-row">
+        <span class="gh-file-icon ${f.type === 'dir' ? 'gh-dir' : ''}">${icon}</span>
+        <span class="gh-file-name">${f.name}</span>
+        ${size}
+        ${dlBtn}
+      </div>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div class="gh-files-wrap">
+        <div class="gh-files-header">
+          <span class="gh-files-label">${fileCount} ${window.siteLang === 'ro' ? 'fișiere' : 'files'}</span>
+          <a class="gh-dl-zip" href="${codeZipUrl}" target="_blank" rel="noopener">
+            ${dlIcon} Download ZIP
+          </a>
+        </div>
+        <div class="gh-files-list">${rows}</div>
+      </div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="proj-tab-empty">${t('code-error')}</div>`;
+  }
+}
+
+function _fmtSize(bytes) {
+  if (bytes < 1024)        return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+// ── LICENSE PANEL ─────────────────────────────────────────────────────────
+let _licensesCache = null;
+
+async function _loadLicensePanel(m) {
+  const el = document.getElementById('proj-license-panel');
+  if (!el) return;
+  el.__loaded = true;
+
+  if (!m.licenseKey) {
+    el.innerHTML = `<div class="proj-tab-empty">${t('license-none')}</div>`;
+    return;
+  }
+  el.innerHTML = `<div class="proj-tab-loading">${t('license-loading')}</div>`;
+
+  try {
+    if (!_licensesCache) {
+      const r = await fetch('https://raw.githubusercontent.com/floringhitun223/florindevassets/main/licenses.json');
+      const json = await r.json();
+      _licensesCache = Array.isArray(json) ? json : (json.licenses || Object.values(json));
+    }
+    const lic = _licensesCache.find(l => (l.id || l.key || l.spdx_id) === m.licenseKey);
+    if (!lic) {
+      el.innerHTML = `<div class="proj-tab-empty">${m.licenseKey}</div>`;
+      return;
+    }
+    const name  = lic.name || m.licenseKey;
+    const url   = lic.url  || lic.link || '';
+    // description may be a bilingual {ro,en} object or a plain string
+    const rawDesc = lic.description || lic.body || lic.text || '';
+    const desc = (rawDesc && typeof rawDesc === 'object')
+      ? (window.siteLang === 'ro' ? (rawDesc.ro || rawDesc.en || '') : (rawDesc.en || rawDesc.ro || ''))
+      : (typeof rawDesc === 'string' ? rawDesc : '');
+    el.innerHTML = `
+      <div class="license-wrap">
+        <div class="license-name-row">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" style="width:14px;height:14px;flex-shrink:0;opacity:.6"><path d="M7 1l1.5 3 3.3.48-2.4 2.34.57 3.3L7 8.55 4.03 10.12l.57-3.3L2.2 4.48 5.5 4z"/></svg>
+          <span class="license-name">${name}</span>
+        </div>
+        ${desc ? `<p class="license-desc">${desc}</p>` : ''}
+      </div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="proj-tab-empty">${t('license-error')}</div>`;
+  }
 }
 
 function _renderProjectPage(m) {
   const heroEl  = document.getElementById('proj-hero');
   const heroArt = document.getElementById('proj-hero-art');
-  if (m.image) {
-    heroArt.innerHTML = `<img src="${m.image}" alt="${m.name}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">`;
+  // Reset tabs — default active is versions, but fall back to first visible
+  const defaultTab = m.versions.length ? 'versions' : (m.codeRepo ? 'code' : (m.licenseKey ? 'license' : 'versions'));
+  _currentProjTab = defaultTab;
+  ['versions', 'code', 'license'].forEach(id => {
+    const btn   = document.getElementById('ptab-' + id);
+    const panel = document.getElementById('proj-panel-' + id);
+    if (btn)   btn.classList.toggle('active', id === defaultTab);
+    if (panel) panel.style.display = id === defaultTab ? '' : 'none';
+    if (panel) panel.__loaded = false;
+  });
+  // Tab label i18n
+  const versionsLabelEl = document.getElementById('ptab-versions-label');
+  const codeLabelEl     = document.getElementById('ptab-code-label');
+  const licenseLabelEl  = document.getElementById('ptab-license-label');
+  if (versionsLabelEl) versionsLabelEl.textContent = t('tab-versions');
+  if (codeLabelEl)     codeLabelEl.textContent     = t('tab-code');
+  if (licenseLabelEl)  licenseLabelEl.textContent  = t('tab-license');
+  // Show/hide Code and License tab buttons
+  const versionsTabBtn = document.getElementById('ptab-versions');
+  const codeTabBtn     = document.getElementById('ptab-code');
+  const licenseTabBtn  = document.getElementById('ptab-license');
+  if (versionsTabBtn) versionsTabBtn.style.display = m.versions.length ? '' : 'none';
+  if (codeTabBtn)     codeTabBtn.style.display     = m.codeRepo    ? '' : 'none';
+  if (licenseTabBtn)  licenseTabBtn.style.display  = m.licenseKey  ? '' : 'none';
+  // Lazy-load if default tab is code or license
+  if (defaultTab === 'code')    _loadCodePanel(m);
+  if (defaultTab === 'license') _loadLicensePanel(m);
+
+  const panelHeroSrc = m.imageHero || m.image || '';
+  if (panelHeroSrc) {
+    heroArt.innerHTML = `<img src="${panelHeroSrc}" alt="${m.name}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">`;
     heroEl.style.background = '#111';
   } else {
     heroArt.innerHTML = '';
@@ -715,6 +1204,19 @@ function _renderProjectPage(m) {
   document.getElementById('proj-hero-name').textContent   = m.name;
   document.title = m.name + ' · FlorinDev';
   document.getElementById('proj-hero-meta').textContent   = m.dev;
+  // Category chip under hero
+  const projCatEl = document.getElementById('proj-category');
+  if (projCatEl) {
+    if (m.category?.key) {
+      const isRo  = window.siteLang === 'ro';
+      const label = isRo ? (m.category.ro || m.category.en || m.category.key) : (m.category.en || m.category.ro || m.category.key);
+      projCatEl.innerHTML = `<span class="proj-cat-badge">${label}</span>`;
+      projCatEl.style.display = '';
+    } else {
+      projCatEl.style.display = 'none';
+      projCatEl.innerHTML = '';
+    }
+  }
   document.getElementById('proj-hero-authors').innerHTML  = m.authors.map(authorChip).join('');
   const statusLabels = { done: t('statusDone'), wip: t('statusWip'), early: t('statusEarly') };
   const statusClasses = { done: 'pill-done', wip: 'pill-wip', early: 'pill-early' };
@@ -756,7 +1258,8 @@ function _renderProjectPage(m) {
     }
   }
   _renderDesc(document.getElementById('proj-desc'), m.description);
-  document.getElementById('proj-files-count').textContent = `${m.versions.length} ${t('versiuni')}`;
+  const filesCountEl = document.getElementById('proj-files-count');
+  if (filesCountEl) filesCountEl.textContent = m.versions.length > 0 ? m.versions.length : '';
   const timeline = document.getElementById('ver-timeline');
   timeline.innerHTML = m.versions.map((v, i) => {
     const isLatest = i === 0;
@@ -1248,6 +1751,32 @@ async function loadSiteSettings() {
       if (el) el.href = d.github;
     }
 
+    // Ko-fi donation URL (cfg-kofi → kofi)
+    if (d.kofi) {
+      document.querySelectorAll('a.tb-kofi, a[title*="Ko-fi"], a[href*="ko-fi.com"]').forEach(a => {
+        a.href = d.kofi;
+        a.style.display = '';
+      });
+    } else {
+      // Hide Ko-fi button if no URL configured
+      document.querySelectorAll('a.tb-kofi').forEach(a => a.style.display = 'none');
+    }
+
+    // PayPal donation URL (cfg-paypal → paypal)
+    if (d.paypal) {
+      document.querySelectorAll('a[href*="paypal.me"], a[title*="PayPal"]:not(.tb-kofi)').forEach(a => {
+        a.href = d.paypal;
+        a.style.display = '';
+      });
+    } else {
+      // Hide PayPal button if no URL configured
+      document.querySelectorAll('.tb-support a:not(.tb-kofi)').forEach(a => {
+        if (a.querySelector('svg') && (a.title || '').toLowerCase().includes('paypal')) {
+          a.style.display = 'none';
+        }
+      });
+    }
+
   } catch(e) {
     console.warn('Could not load site settings:', e);
   }
@@ -1286,10 +1815,30 @@ function _svcIconClass(badge) {
   return '';
 }
 
+// SVG icon presets — must match admin's SVC_ICON_PRESETS keys exactly
+const SVC_SVG_PRESETS = {
+  website:    '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="16" height="13" rx="1.5"/><path d="M2 7h16"/><circle cx="5" cy="5" r=".5" fill="currentColor" stroke="none"/><circle cx="7.5" cy="5" r=".5" fill="currentColor" stroke="none"/></svg>',
+  mobile:     '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="2" width="8" height="16" rx="1.5"/><circle cx="10" cy="15.5" r=".8" fill="currentColor" stroke="none"/><line x1="8" y1="4.5" x2="12" y2="4.5"/></svg>',
+  api:        '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="5,8 2,10 5,12"/><polyline points="15,8 18,10 15,12"/><line x1="11" y1="5" x2="9" y2="15"/></svg>',
+  design:     '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 14l4-4 3 3 4-5 3 3"/><rect x="2" y="3" width="16" height="14" rx="1.5"/></svg>',
+  ecommerce:  '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h2l1 7h9l1-5H6"/><circle cx="9" cy="17" r="1"/><circle cx="15" cy="17" r="1"/></svg>',
+  seo:        '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="9" r="5.5"/><line x1="13.5" y1="13.5" x2="17" y2="17"/><polyline points="7,9 9,11 12,7"/></svg>',
+  bot:        '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="6" width="12" height="10" rx="1.5"/><circle cx="8" cy="11" r="1"/><circle cx="12" cy="11" r="1"/><path d="M8 14h4"/><line x1="10" y1="6" x2="10" y2="3"/><line x1="7" y1="3" x2="13" y2="3"/></svg>',
+  hosting:    '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="16" height="5" rx="1"/><rect x="2" y="11" width="16" height="5" rx="1"/><circle cx="15.5" cy="6.5" r=".8" fill="currentColor" stroke="none"/><circle cx="15.5" cy="13.5" r=".8" fill="currentColor" stroke="none"/></svg>',
+  consulting: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="7" r="3"/><path d="M4 17c0-3 2.7-5 6-5s6 2 6 5"/></svg>',
+};
+
 function _svcIconSvg(svc) {
-  const ti = svc.icon || SVC_TYPE_ICONS[svc.type] || 'ti-briefcase';
+  const iconVal = svc.icon || '';
+  // Raw SVG string pasted from admin
+  if (iconVal.startsWith('<')) return iconVal;
+  // Named preset from admin's SVC_ICON_PRESETS
+  if (SVC_SVG_PRESETS[iconVal]) return SVC_SVG_PRESETS[iconVal];
+  // Legacy tabler icon class
+  const ti = iconVal || SVC_TYPE_ICONS[svc.type] || 'ti-briefcase';
   if (ti.startsWith('ti-')) return `<i class="ti ${ti}"></i>`;
-  return `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/></svg>`;
+  // Fallback
+  return SVC_SVG_PRESETS.website;
 }
 
 function _svcNormalize(raw) {
@@ -1448,15 +1997,48 @@ async function loadServices() {
     }
     const d = snap.data();
 
+    // ── GUARANTEE BANNER ──────────────────────────────────────────────────
+    // Reads d.guarantee: { active, icon, color, text: {ro,en} }
+    const guaranteeEl = document.getElementById('svc-guarantee');
+    if (guaranteeEl) {
+      const g = d.guarantee || {};
+      if (g.active) {
+        const gText = _langVal(g, 'text') || (typeof g.text === 'string' ? g.text : '') || '';
+
+        // Color map → CSS vars for the banner
+        const COLOR_MAP = {
+          green:  { bg: 'rgba(34,197,94,.08)',  border: 'rgba(34,197,94,.25)',  color: '#4ade80' },
+          blue:   { bg: 'rgba(59,130,246,.08)', border: 'rgba(59,130,246,.25)', color: '#93c5fd' },
+          orange: { bg: 'rgba(245,158,11,.08)', border: 'rgba(245,158,11,.25)', color: '#fbbf24' },
+          purple: { bg: 'rgba(168,85,247,.08)', border: 'rgba(168,85,247,.25)', color: '#c084fc' },
+          red:    { bg: 'rgba(239,68,68,.08)',  border: 'rgba(239,68,68,.25)',  color: '#f87171' },
+        };
+        const clr = COLOR_MAP[g.color] || COLOR_MAP.green;
+
+        // Icon SVG map — must match admin's GUARANTEE_ICONS keys
+        const GUARANTEE_SVG = {
+          shield:   '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="width:15px;height:15px;flex-shrink:0;margin-top:1px"><path d="M8 1.5L2 4v5c0 3 2.5 5.5 6 6 3.5-.5 6-3 6-6V4L8 1.5z"/><polyline points="5.5,8 7.5,10 11,6" stroke-width="1.4"/></svg>',
+          star:     '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="width:15px;height:15px;flex-shrink:0;margin-top:1px"><polygon points="8,2 10,6 14,6.5 11,9.5 12,14 8,11.5 4,14 5,9.5 2,6.5 6,6"/></svg>',
+          check:    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="width:15px;height:15px;flex-shrink:0;margin-top:1px"><circle cx="8" cy="8" r="6.5"/><polyline points="5,8 7,10.5 11,5.5"/></svg>',
+          heart:    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="width:15px;height:15px;flex-shrink:0;margin-top:1px"><path d="M8 13.5C8 13.5 2 9.5 2 5.5a3.5 3.5 0 0 1 6-2.4A3.5 3.5 0 0 1 14 5.5c0 4-6 8-6 8z"/></svg>',
+          medal:    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="width:15px;height:15px;flex-shrink:0;margin-top:1px"><circle cx="8" cy="10" r="4"/><path d="M5.5 6.5L4 2h8l-1.5 4.5"/></svg>',
+          lock:     '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="width:15px;height:15px;flex-shrink:0;margin-top:1px"><rect x="3.5" y="7" width="9" height="7.5" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>',
+        };
+        const iconSvg = GUARANTEE_SVG[g.icon] || GUARANTEE_SVG.shield;
+
+        guaranteeEl.style.display = '';
+        guaranteeEl.style.background   = clr.bg;
+        guaranteeEl.style.borderColor  = clr.border;
+        guaranteeEl.style.color        = clr.color;
+        guaranteeEl.innerHTML = `${iconSvg}<span>${gText}</span>`;
+      } else {
+        guaranteeEl.style.display = 'none';
+      }
+    }
+
     const tabsEl  = document.getElementById('svc-tabs');
     const panelEl = document.getElementById('svc-panel');
     if (!panelEl) return;
-
-    // Show guarantee now that we have data
-    const guaranteeEl = document.getElementById('svc-guarantee');
-    if (guaranteeEl) guaranteeEl.style.display = '';
-
-
 
     const list = rawList.map(_svcNormalize).sort((a, b) => a.order - b.order);
 
