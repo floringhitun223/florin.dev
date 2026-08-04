@@ -340,7 +340,7 @@ let currentMod  = null;
 let currentPage = 1;
 let totalPages  = 1;
 
-let _viewMode    = 'list'; // 'list' | 'grid'
+let _viewMode    = 'grid'; // 'list' | 'grid'
 let _sortOrder   = 'desc'; // 'desc' = New first | 'asc' = Old first
 let _sortedIndex = [];         // current sorted copy of INDEX
 let _activeCat   = '';         // '' = all; otherwise category key
@@ -455,7 +455,7 @@ function firestoreDocToMod(docId, data) {
   return {
     id: docId, name: _langVal(data, 'Name') || data.Name || docId, dev: shortDesc, year,
     authors, status, downloadUrl,
-    description: _langVal(data, 'desc') || '', image: data.image || '', imageHero: data.imageHero || '',
+    description: _langVal(data, 'desc') || '', image: data.image || '', imageHero: data.imageHero || '', imageHero2: data.imageHero2 || '',
     marks,
     aiUsed: marks.length ? hasAiMark : legacyAi,
     aiDisclaimer: data.ai_disclaimer || 'Voci generate prin AI (voice cloning)',
@@ -498,20 +498,20 @@ function _ensureProjectsToolbar() {
   toolbar.className = 'proj-toolbar';
   toolbar.innerHTML = `
     <div class="pt-sort">
-      <button class="pt-sort-btn pt-active" id="pt-new" onclick="_setSort('desc')" title="${isRo ? 'Cele mai noi' : 'Newest first'}">
+      <button class="pt-sort-btn${_sortOrder === 'desc' ? ' pt-active' : ''}" id="pt-new" onclick="_setSort('desc')" title="${isRo ? 'Cele mai noi' : 'Newest first'}">
         <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="2" y1="3" x2="11" y2="3"/><line x1="2" y1="7" x2="8" y2="7"/><line x1="2" y1="11" x2="5" y2="11"/></svg>
         ${isRo ? 'Nou' : 'New'}
       </button>
-      <button class="pt-sort-btn" id="pt-old" onclick="_setSort('asc')" title="${isRo ? 'Cele mai vechi' : 'Oldest first'}">
+      <button class="pt-sort-btn${_sortOrder === 'asc' ? ' pt-active' : ''}" id="pt-old" onclick="_setSort('asc')" title="${isRo ? 'Cele mai vechi' : 'Oldest first'}">
         <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="2" y1="3" x2="5" y2="3"/><line x1="2" y1="7" x2="8" y2="7"/><line x1="2" y1="11" x2="11" y2="11"/></svg>
         ${isRo ? 'Vechi' : 'Old'}
       </button>
     </div>
     <div class="pt-view">
-      <button class="pt-view-btn pt-active" id="pt-list" onclick="_setView('list')" title="${isRo ? 'Listă' : 'List view'}">
+      <button class="pt-view-btn${_viewMode === 'list' ? ' pt-active' : ''}" id="pt-list" onclick="_setView('list')" title="${isRo ? 'Listă' : 'List view'}">
         <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="2" y1="3.5" x2="13" y2="3.5"/><line x1="2" y1="7.5" x2="13" y2="7.5"/><line x1="2" y1="11.5" x2="13" y2="11.5"/></svg>
       </button>
-      <button class="pt-view-btn" id="pt-grid" onclick="_setView('grid')" title="${isRo ? 'Grilă' : 'Grid view'}">
+      <button class="pt-view-btn${_viewMode === 'grid' ? ' pt-active' : ''}" id="pt-grid" onclick="_setView('grid')" title="${isRo ? 'Grilă' : 'Grid view'}">
         <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="8.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="8.5" width="5" height="5" rx="1"/><rect x="8.5" y="8.5" width="5" height="5" rx="1"/></svg>
       </button>
     </div>`;
@@ -521,6 +521,11 @@ function _ensureProjectsToolbar() {
 function _setSort(order) {
   if (_sortOrder === order) return;
   _sortOrder = order;
+  // Persist sort in URL
+  const url = new URL(window.location.href);
+  if (order === 'asc') url.searchParams.set('sort', 'old');
+  else url.searchParams.delete('sort'); // 'desc' is default, keep URL clean
+  window.history.replaceState(null, '', url.pathname + url.search);
   document.getElementById('pt-new')?.classList.toggle('pt-active', order === 'desc');
   document.getElementById('pt-old')?.classList.toggle('pt-active', order === 'asc');
   _applySort();
@@ -535,6 +540,11 @@ window._setSort = _setSort;
 function _setView(mode) {
   if (_viewMode === mode) return;
   _viewMode = mode;
+  // Persist view in URL
+  const url = new URL(window.location.href);
+  if (mode === 'list') url.searchParams.set('view', 'list');
+  else url.searchParams.delete('view'); // 'grid' is default, keep URL clean
+  window.history.replaceState(null, '', url.pathname + url.search);
   document.getElementById('pt-list')?.classList.toggle('pt-active', mode === 'list');
   document.getElementById('pt-grid')?.classList.toggle('pt-active', mode === 'grid');
   const tableHead = document.querySelector('.mod-table-head');
@@ -653,19 +663,20 @@ function _renderList(table, pageItems) {
     const dev      = mod ? mod.dev      : '';
     const year     = mod ? mod.year     : '';
     const verCount = mod ? mod.versions.length : '–';
-    const marksHtml = mod && mod.marks?.length
-      ? `<div class="mr-marks">${renderMarksHtml(mod.marks, { compact: true, limit: 3 })}</div>`
+    const marksInlineHtml = mod && mod.marks?.length
+      ? renderMarksHtml(mod.marks, { compact: true, limit: 3 })
       : '';
     const thumbInner = mod && mod.image
       ? `<img src="${mod.image}" alt="${name}" style="width:100%;height:100%;object-fit:cover;display:block">`
       : (mod ? coverThumbFallback(mod) : `<div style="width:100%;height:100%;background:var(--s3)"></div>`);
+    const isNew = entry.timestamp && (Date.now() - (entry.timestamp > 1e12 ? entry.timestamp : entry.timestamp * 1000)) < 5 * 24 * 60 * 60 * 1000;
+    const newBadgeHtml = isNew && !(mod?.marks?.length) ? `<span class="mr-new-badge">${window.siteLang === 'ro' ? 'Nou' : 'New'}</span>` : '';
     row.innerHTML = `
       <div class="mr-name-cell">
         <div class="mr-cover-thumb">${thumbInner}</div>
         <div class="mr-name-inner">
-          <div class="mr-name">${name}</div>
+          <div class="mr-name"><span class="mr-name-text">${name}</span>${marksInlineHtml ? `<span class="mr-name-badges">${marksInlineHtml}</span>` : ''}${newBadgeHtml}</div>
           <div class="mr-dev">${dev}</div>
-          ${marksHtml}
         </div>
       </div>
       <div class="mr-files-cell"><strong>${verCount}</strong><span>${t('versiuni')}</span></div>
@@ -719,8 +730,8 @@ function _renderGrid(table, pageItems) {
       ? `<div class="mgc-marks">${renderMarksHtml(mod.marks, { compact: true, limit: 2 })}</div>`
       : '';
 
-    // Hero: use imageHero (landscape banner) in grid, fall back to favicon, then gradient
-    const heroSrc = mod && (mod.imageHero || mod.image);
+    // Hero: use imageHero2 (grid thumbnail) in grid, fall back to imageHero, then image (favicon), then gradient
+    const heroSrc = mod && (mod.imageHero2 || mod.imageHero || mod.image);
     const heroInner = heroSrc
       ? `<img src="${heroSrc}" alt="${name}" class="mgc-hero-img">`
       : (mod
@@ -734,6 +745,9 @@ function _renderGrid(table, pageItems) {
       span = spanBase + (posInLastRow < spanRem ? 1 : 0);
     }
 
+    const isNew = entry.timestamp && (Date.now() - (entry.timestamp > 1e12 ? entry.timestamp : entry.timestamp * 1000)) < 5 * 24 * 60 * 60 * 1000;
+    const newBadgeHtml = isNew && !(mod?.marks?.length) ? `<span class="mr-new-badge mgc-new-badge">${window.siteLang === 'ro' ? 'Nou' : 'New'}</span>` : '';
+
     const card = document.createElement('div');
     card.className = 'mgc';
     if (span > 1) card.style.gridColumn = `span ${span}`;
@@ -743,7 +757,7 @@ function _renderGrid(table, pageItems) {
     card.onkeydown = e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); openProject(entry.id); } };
 
     card.innerHTML = `
-      <div class="mgc-hero">${heroInner}</div>
+      <div class="mgc-hero">${heroInner}${newBadgeHtml}</div>
       <div class="mgc-body">
         <div class="mgc-name">${name}</div>
         <div class="mgc-dev">${dev}</div>
@@ -1370,19 +1384,9 @@ function _renderProjectPage(m) {
   document.getElementById('proj-hero-name').textContent   = m.name;
   document.title = m.name + ' · FlorinDev';
   document.getElementById('proj-hero-meta').textContent   = m.dev;
-  // Category chip under hero
+  // Category chip — hidden on project page (list only)
   const projCatEl = document.getElementById('proj-category');
-  if (projCatEl) {
-    if (m.category?.key) {
-      const isRo  = window.siteLang === 'ro';
-      const label = isRo ? (m.category.ro || m.category.en || m.category.key) : (m.category.en || m.category.ro || m.category.key);
-      projCatEl.innerHTML = `<span class="proj-cat-badge">${label}</span>`;
-      projCatEl.style.display = '';
-    } else {
-      projCatEl.style.display = 'none';
-      projCatEl.innerHTML = '';
-    }
-  }
+  if (projCatEl) { projCatEl.style.display = 'none'; projCatEl.innerHTML = ''; }
   document.getElementById('proj-hero-authors').innerHTML  = m.authors.map(authorChip).join('');
   const statusLabels = { done: t('statusDone'), wip: t('statusWip'), early: t('statusEarly') };
   const statusClasses = { done: 'pill-done', wip: 'pill-wip', early: 'pill-early' };
@@ -1552,6 +1556,21 @@ function resolveRoute() {
 
   if (sec === 'proiecte') {
     _activatePage('products');
+
+    // Read view param: 'list' → list; anything else (or absent) → grid (default)
+    const viewParam = (params.get('view') || '').toLowerCase();
+    const resolvedView = viewParam === 'list' ? 'list' : 'grid';
+    if (_viewMode !== resolvedView) {
+      _viewMode = resolvedView;
+      // Update table head visibility (toolbar may not exist yet — renderMods will handle it)
+      const tableHead = document.querySelector('.mod-table-head');
+      if (tableHead) tableHead.style.display = _viewMode === 'grid' ? 'none' : '';
+    }
+
+    // Read sort param: 'old' → asc; anything else (or absent) → desc (default)
+    const sortParam = (params.get('sort') || '').toLowerCase();
+    _sortOrder = sortParam === 'old' ? 'asc' : 'desc';
+
     // ?page=proiecte&id=some-project
     if (projId) {
       if (INDEX.length > 0) _doOpenProjectFromFirestore(projId);
@@ -1565,7 +1584,7 @@ function resolveRoute() {
       if (INDEX.length > 0) {
         if (pg > totalPages) { show404(); return; }
         currentPage = pg;
-        renderMods(); preloadPage(currentPage);
+        _applySort(); renderMods(); preloadPage(currentPage);
       } else {
         // Store raw value — validated against real totalPages once index loads
         _pendingPage = pg;
@@ -1573,7 +1592,7 @@ function resolveRoute() {
       return;
     }
     currentPage = 1;
-    if (INDEX.length > 0) { renderMods(); preloadPage(1); }
+    if (INDEX.length > 0) { _applySort(); renderMods(); preloadPage(1); }
     return;
   }
 
