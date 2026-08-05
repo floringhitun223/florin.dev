@@ -61,6 +61,38 @@ function _detectLang() {
 
 window.siteLang = _detectLang();
 
+// ── ANIMATED PRICE COUNTER ─────────────────────────────────────────────────
+function _animatePrice(el, targetVal, currency) {
+  const DURATION = 380; // ms
+  const startVal = parseFloat(el.dataset.animVal ?? el.textContent.replace(/[^0-9.]/g, '')) || 0;
+  el.dataset.animVal = targetVal;
+
+  if (startVal === targetVal) return;
+
+  if (el._animRaf) cancelAnimationFrame(el._animRaf);
+
+  const startTime = performance.now();
+
+  function step(now) {
+    const elapsed  = now - startTime;
+    const progress = Math.min(elapsed / DURATION, 1);
+    const eased    = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+    const current  = startVal + (targetVal - startVal) * eased;
+
+    el.textContent = currency + Math.round(current);
+
+    if (progress < 1) {
+      el._animRaf = requestAnimationFrame(step);
+    } else {
+      el.textContent     = currency + targetVal;
+      el.dataset.animVal = targetVal;
+      el._animRaf        = null;
+    }
+  }
+
+  el._animRaf = requestAnimationFrame(step);
+}
+
 // Write lang param into the URL without reloading (preserves all other params)
 function _syncLangParam() {
   const url = new URL(window.location.href);
@@ -1602,6 +1634,25 @@ function resolveRoute() {
     return;
   }
 
+  // ?page=servicii&id=SLUG — open service panel directly via URL
+  // ?page=servicii&cat=KEY — category drill-down
+  if (sec === 'servicii') {
+    _activatePage('servicii');
+    const idParam  = params.get('id')  || '';
+    const catParam = params.get('cat') || '';
+    const panelEl  = document.getElementById('svc-panel');
+    if (idParam && _svcLoadedList) {
+      // Render the feed first (so there's a page behind the panel), then open panel
+      if (panelEl) _renderSvcFeed(panelEl, _svcLoadedList);
+      _doOpenService(idParam);
+    } else if (panelEl && _svcLoadedList) {
+      if (catParam) _renderSvcCatPage(panelEl, _svcLoadedList, catParam);
+      else _renderSvcFeed(panelEl, _svcLoadedList);
+    }
+    // If services haven't loaded yet, loadServices() will handle id/cat param on its own
+    return;
+  }
+
   const pageId = QUERY_PAGE_MAP[sec];
   if (pageId === undefined) { show404(); return; }
   _activatePage(pageId);
@@ -2027,8 +2078,13 @@ function _svcIconSvg(svc) {
 }
 
 function _svcNormalize(raw) {
+  const name = _langVal(raw, 'name') || raw.name || '';
+  // ID always derived from English name for a stable, language-independent URL slug
+  const rawName = raw.name;
+  const engName = (rawName && typeof rawName === 'object') ? (rawName.en || rawName.ro || '') : (rawName || '');
   return {
-    name:     _langVal(raw, 'name')               || raw.name || '',
+    id:       _slugify(engName) || _slugify(name) || ('svc-' + Math.random().toString(36).slice(2,7)),
+    name,
     creator:  raw.creator  || '',
     desc:     _langVal(raw, 'desc') || _langVal(raw, 'tagline') || raw.desc || raw.tagline || '',
     type:     raw.type     || 'serviciu',
@@ -2039,137 +2095,428 @@ function _svcNormalize(raw) {
     features: Array.isArray(raw.features) ? raw.features : [],
     extras:   Array.isArray(raw.extras)   ? raw.extras   : [],
     icon:     raw.icon     || '',
+    // Keep the full category object { key, ro, en } so we can resolve the label per-lang
     category: raw.category || '',
+    // Service state
+    status:      raw.status      || 'normal',
+    discountPct: raw.discountPct || null,
+    limitDate:   raw.limitDate   || null,
   };
 }
 
-function _svcRowHtml(svc, idPrefix) {
-  const checkSvg = `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><polyline points="2,6 5,9 10,3"/></svg>`;
-  const chevSvg  = `<svg class="svc-row-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="2,4 6,8 10,4"/></svg>`;
-  const badgeCls = _svcBadgeClass(svc.badge);
-  const badge = svc.badge
-    ? `<span class="svc-badge ${badgeCls}">${svc.badge}</span>`
-    : '';
+// Returns effective display status — timelimited becomes 'expired' (treated as unavailable) if past limitDate
+function _svcEffectiveStatus(svc) {
+  const s = svc.status || 'normal';
+  if (s === 'timelimited' && svc.limitDate) {
+    const end = new Date(svc.limitDate);
+    if (!isNaN(end) && end <= new Date()) return 'expired';
+  }
+  return s;
+}
+
+// ── SHARED SERVICE CARD CORE ──────────────────────────────────────────────
+// Builds the full .svc-card HTML used both in the popup and in accordion rows.
+// inAccordion=true wraps it in the .svc-item shell.
+function _svcCardHtmlCore(svc, idPrefix, inAccordion) {
+  const isRo      = window.siteLang === 'ro';
+  const checkSvg  = `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><polyline points="2,6 5,9 10,3"/></svg>`;
+  const badgeCls  = _svcBadgeClass(svc.badge);
+  const badge     = svc.badge ? `<span class="svc-badge ${badgeCls}">${svc.badge}</span>` : '';
   const iconClass = _svcIconClass(svc.badge);
   const currency  = svc.currency || '€';
   const tagline   = svc.desc || svc.tagline || '';
-  const creator   = svc.creator
-    ? `<div class="svc-row-creator">${t('de')} ${svc.creator}</div>`
-    : '';
+  const creator   = svc.creator ? `<div class="svc-row-creator">${t('de')} ${svc.creator}</div>` : '';
+  const basePrice = parseFloat(svc.price) || 0;
 
-  // Features — support both string (legacy) and {ro,en} objects
+  // Effective status — expired timelimited treated as unavailable
+  const effStatus = _svcEffectiveStatus(svc);
+  const isBlocked = effStatus === 'unavailable' || effStatus === 'expired';
+  const isDiscount = effStatus === 'discount';
+  const isTimelimited = effStatus === 'timelimited';
+
+  // Discount math
+  const pct = isDiscount ? (parseFloat(svc.discountPct) || 0) : 0;
+  const discountedBase = pct > 0 ? Math.round(basePrice * (1 - pct / 100)) : basePrice;
+
+  // Features
   const feats = (svc.features || []).map(f => {
-    const label = (typeof f === 'object') ? (_langVal(f, '') || f.ro || f.en || '') : f;
+    const label = (typeof f === 'object') ? (isRo ? (f.ro || f.en || '') : (f.en || f.ro || '')) : (f || '');
     return label ? `<div class="svc-feat-item">${checkSvg}<span>${label}</span></div>` : '';
   }).join('');
 
-  // Extras — interactive checkboxes with optional price
-  const extrasId = `extras-${idPrefix}`;
+  // Extras (only shown when not blocked)
   const extras = (svc.extras || []);
   let extrasHtml = '';
-  if (extras.length) {
+  let summaryAddonsHtml = `<div class="svc-pkg-empty" id="pkg-empty-${idPrefix}">${isRo ? 'Niciun extra selectat' : 'No add-ons selected yet'}</div>`;
+  if (extras.length && !isBlocked) {
     const rows = extras.map((ex, i) => {
-      const label   = _langVal(ex, 'label') || (typeof ex.label === 'string' ? ex.label : '') || '';
-      const isFree  = ex.free || !ex.price;
-      const exCurr  = ex.currency || currency;
-      const priceTag = isFree
-        ? `<span class="svc-extra-free">${t('svc-extras-free')}</span>`
-        : `<span class="svc-extra-price">+${exCurr}${ex.price}</span>`;
+      const label  = _langVal(ex, 'label') || (typeof ex.label === 'string' ? ex.label : '') || '';
+      const isFree = ex.free || !ex.price;
+      const exCurr = ex.currency || currency;
+      const rawExPrice = parseFloat(ex.price) || 0;
+      const subAddons = Array.isArray(ex.subAddons) ? ex.subAddons : [];
+
+      // Per-extra discount: show struck-through original + discounted price
+      let priceTag;
+      if (isFree) {
+        priceTag = `<span class="svc-extra-free">${t('svc-extras-free')}</span>`;
+      } else if (isDiscount && pct > 0) {
+        const discountedExPrice = Math.round(rawExPrice * (1 - pct / 100));
+        priceTag = `<span class="svc-extra-price-wrap">
+          <span class="svc-extra-price-original">+${exCurr}${rawExPrice}</span>
+          <span class="svc-extra-price svc-extra-price-discounted">+${exCurr}${discountedExPrice}</span>
+        </span>`;
+      } else {
+        priceTag = `<span class="svc-extra-price">+${exCurr}${rawExPrice}</span>`;
+      }
+
+      // Store the effective price for total calculation (discounted if applicable)
+      const effectivePrice = (isDiscount && pct > 0 && !isFree)
+        ? Math.round(rawExPrice * (1 - pct / 100))
+        : rawExPrice;
+
+      // Sub-addons rendered below parent, collapsed and disabled until parent is checked
+      let subAddonsHtml = '';
+      if (subAddons.length) {
+        const subRows = subAddons.map((sub, si) => {
+          const subLabel   = _langVal(sub, 'label') || (typeof sub.label === 'string' ? sub.label : '') || '';
+          const subIsFree  = sub.free || !sub.price;
+          const subCurr    = sub.currency || exCurr;
+          const rawSubPrice = parseFloat(sub.price) || 0;
+          const effectiveSubPrice = (isDiscount && pct > 0 && !subIsFree)
+            ? Math.round(rawSubPrice * (1 - pct / 100))
+            : rawSubPrice;
+
+          let subPriceTag;
+          if (subIsFree) {
+            subPriceTag = `<span class="svc-extra-free">${t('svc-extras-free')}</span>`;
+          } else if (isDiscount && pct > 0) {
+            const discountedSubPrice = Math.round(rawSubPrice * (1 - pct / 100));
+            subPriceTag = `<span class="svc-extra-price-wrap">
+              <span class="svc-extra-price-original">+${subCurr}${rawSubPrice}</span>
+              <span class="svc-extra-price svc-extra-price-discounted">+${subCurr}${discountedSubPrice}</span>
+            </span>`;
+          } else {
+            subPriceTag = `<span class="svc-extra-price">+${subCurr}${rawSubPrice}</span>`;
+          }
+
+          return `
+            <label class="svc-extra-row svc-subaddon-row" data-idx="${i}-${si}" data-price="${subIsFree ? 0 : effectiveSubPrice}" data-currency="${subCurr}" data-free="${subIsFree}" data-label="${subLabel.replace(/"/g, '&quot;')}" data-parent-idx="${i}">
+              <span class="svc-subaddon-indent"></span>
+              <input type="checkbox" class="svc-extra-chk svc-subaddon-chk" onchange="_svcUpdateTotal('${idPrefix}')" disabled />
+              <span class="svc-extra-check-icon">${checkSvg}</span>
+              <div class="svc-extra-info"><span class="svc-extra-label">${subLabel}</span></div>
+              ${subPriceTag}
+            </label>`;
+        }).join('');
+        subAddonsHtml = `<div class="svc-subaddons-group" data-parent-idx="${i}">${subRows}</div>`;
+      }
+
       return `
-        <label class="svc-extra-row" data-idx="${i}" data-price="${isFree ? 0 : (parseFloat(ex.price)||0)}" data-currency="${exCurr}" data-free="${isFree}">
-          <input type="checkbox" class="svc-extra-chk" onchange="_svcUpdateTotal('${idPrefix}')" />
+        <label class="svc-extra-row${subAddons.length ? ' svc-extra-has-subs' : ''}" data-idx="${i}" data-price="${isFree ? 0 : effectivePrice}" data-currency="${exCurr}" data-free="${isFree}" data-label="${label.replace(/"/g, '&quot;')}">
+          <input type="checkbox" class="svc-extra-chk" onchange="_svcUpdateTotal('${idPrefix}'); _svcToggleSubAddons(this, '${idPrefix}')" />
           <span class="svc-extra-check-icon">${checkSvg}</span>
-          <span class="svc-extra-label">${label}</span>
+          <div class="svc-extra-info"><span class="svc-extra-label">${label}</span>${subAddons.length ? `<span class="svc-extra-sub-count">${subAddons.length}</span>` : ''}</div>
           ${priceTag}
-        </label>`;
+        </label>${subAddonsHtml}`; 
     }).join('');
-    extrasHtml = `
-      <div class="svc-extras-wrap" id="${extrasId}">
-        <div class="svc-extras-title">${t('svc-extras-title')}</div>
-        ${rows}
-        <div class="svc-extras-total" id="total-${idPrefix}" style="display:none"></div>
+    extrasHtml = `<div class="svc-extras-wrap" id="extras-${idPrefix}"><div class="svc-extras-title">${t('svc-extras-title')}</div>${rows}</div>`;
+  }
+
+  // Meta badges
+  const metaBadges = [];
+  if (svc.turnaround) metaBadges.push(`<span class="svc-meta-badge svc-meta-blue"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="5"/><polyline points="6,3 6,6 8,7.5"/></svg>${svc.turnaround}</span>`);
+  if (svc.guarantee)  metaBadges.push(`<span class="svc-meta-badge svc-meta-green"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 1l1.2 2.4 2.7.4-1.95 1.9.46 2.7L6 7.3 3.57 8.44l.46-2.7L2.1 3.8 4.8 3.4z"/></svg>${svc.guarantee}</span>`);
+  if (svc.clients)    metaBadges.push(`<span class="svc-meta-badge svc-meta-amber"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4.5" cy="4" r="2"/><path d="M1 10c0-2 1.5-3 3.5-3s3.5 1 3.5 3"/><circle cx="8.5" cy="3.5" r="1.5"/><path d="M10.5 9c0-1.5-1-2.5-2.5-2.5"/></svg>${svc.clients}</span>`);
+
+  // ── Status banner (blocked state — replaces right panel)
+  let statusBannerHtml = '';
+  if (isBlocked) {
+    const lockSvg = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;flex-shrink:0"><rect x="3" y="7.5" width="10" height="7" rx="1.5"/><path d="M5.5 7.5V5.5a2.5 2.5 0 015 0v2"/></svg>`;
+    const title = effStatus === 'expired'
+      ? (isRo ? 'Ofertă expirată' : 'Offer expired')
+      : (isRo ? 'Serviciu indisponibil' : 'Service unavailable');
+    const sub = effStatus === 'expired'
+      ? (isRo ? 'Această ofertă nu mai este disponibilă. Revin în curând cu oferte noi.' : 'This offer is no longer available. Check back soon for new offers.')
+      : (isRo ? 'Acest serviciu este momentan indisponibil. Verificați din nou mai târziu.' : 'This service is temporarily unavailable. Please check back later.');
+    statusBannerHtml = `
+      <div class="svc-state-blocked-banner">
+        ${lockSvg}
+        <div>
+          <div class="svc-state-blocked-title">${title}</div>
+          <div class="svc-state-blocked-sub">${sub}</div>
+        </div>
       </div>`;
   }
 
-  return `
-    <div class="svc-row" data-svc-id="${idPrefix}" data-base-price="${parseFloat(svc.price)||0}" data-currency="${currency}">
-      <div class="svc-row-main">
-        <div class="svc-row-icon ${iconClass}">${_svcIconSvg(svc)}</div>
-        <div class="svc-row-info">
-          <div class="svc-row-name-line">
-            <span class="svc-row-name">${svc.name || ''}</span>${badge}
-          </div>
-          ${tagline ? `<div class="svc-row-tagline">${tagline}</div>` : ''}
+  // (discount banner removed — discount is now shown per-price inline)
+
+
+  // ── Base price display in right panel — struck-through original + discounted when active
+  const basePriceHtml = isDiscount && pct > 0
+    ? `<span class="svc-pkg-price-original">${currency}${basePrice}</span>
+       <span class="svc-pkg-price-val" id="price-${idPrefix}">${currency}${discountedBase}</span>`
+    : `<span class="svc-pkg-price-val" id="price-${idPrefix}">${currency}${svc.price || ''}</span>`;
+
+  // ── "How discount applies" button — only shown when discount is active
+  const discountInfoBtn = isDiscount && pct > 0
+    ? `<button class="svc-discount-info-btn" type="button" onclick="this.nextElementSibling.classList.toggle('open')">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5.5"/><line x1="4.5" y1="9.5" x2="9.5" y2="4.5"/><circle cx="5" cy="5" r=".6" fill="currentColor" stroke="none"/><circle cx="9" cy="9" r=".6" fill="currentColor" stroke="none"/></svg>
+        ${isRo ? 'Cum se aplică reducerea' : 'How the discount applies'}
+        <span class="svc-discount-badge">-${Math.round(pct)}%</span>
+      </button>
+      <div class="svc-discount-tooltip">
+        ${isRo
+          ? `Reducere de <strong>${Math.round(pct)}%</strong> aplicată automat la prețul de bază și la fiecare extra. Prețul afișat este deja redus — nu este nevoie de cod promoțional.`
+          : `A <strong>${Math.round(pct)}%</strong> discount is automatically applied to the base price and every add-on. The price shown is already reduced — no promo code needed.`
+        }
+      </div>`
+    : '';
+
+  // ── Right panel (hidden when blocked)
+  const rightPanelHtml = isBlocked ? '' : `
+    <div class="svc-card-right">
+      <div class="svc-pkg-box">
+        <div class="svc-pkg-title">${isRo ? 'Pachetul tău' : 'Your package'}</div>
+        <div class="svc-pkg-line svc-pkg-base">
+          <span>${isRo ? 'Preț de bază' : 'Base price'}</span>
+          <div class="svc-pkg-base-price-wrap">${basePriceHtml}</div>
         </div>
-        <div class="svc-row-right">
-          <span class="svc-row-price" id="price-${idPrefix}">${currency}${svc.price || ''}</span>
-          ${chevSvg}
+        <div class="svc-pkg-separator"></div>
+        <div class="svc-pkg-addons" id="pkg-addons-${idPrefix}">${summaryAddonsHtml}</div>
+        <div class="svc-pkg-separator"></div>
+        <div class="svc-pkg-total-row">
+          <span>Total</span>
+          <span class="svc-pkg-total-val" id="total-${idPrefix}">${currency}${isDiscount && pct > 0 ? discountedBase : (svc.price || '')}</span>
+        </div>
+        <button class="btn btn-cart svc-pkg-cart-btn" id="cart-btn-${idPrefix}" onclick="_svcAddToCart('${idPrefix}', '${svc.id || _slugify(svc.name || '')}')">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="5.5" cy="12" r=".9"/><circle cx="10.5" cy="12" r=".9"/><path d="M1 2h1.7l2 6.5h5.5l1.5-4.5H3.5"/></svg>
+          ${isRo ? 'Adaugă în coș' : 'Add to cart'}
+        </button>
+        <a class="btn btn-ghost svc-pkg-cta" href="mailto:${_contactEmail}" id="cta-${idPrefix}">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1" y="3" width="12" height="9" rx="1.5"/><polyline points="1,3 7,8.5 13,3"/></svg>
+          ${t('solicita')} ↗
+        </a>
+        <div class="svc-pkg-note">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="5" width="10" height="7" rx="1"/><path d="M5 5V3.5a2 2 0 014 0V5"/></svg>
+          ${isRo ? 'Nicio plată acum — ofertă gratuită' : 'No payment now — free quote'}
+        </div>
+        ${discountInfoBtn}
+        <div class="svc-pkg-spots" id="pkg-spots-${idPrefix}" style="display:none">
+          <span class="svc-pkg-spots-dot"></span>
+          <span id="pkg-spots-text-${idPrefix}"></span>
         </div>
       </div>
-      <div class="svc-row-detail">
-        ${creator}
-        ${feats ? `<div class="svc-feat-list">${feats}</div>` : ''}
-        ${extrasHtml}
-        <div class="svc-row-actions">
-          <a class="btn btn-accent" href="mailto:${_contactEmail}" id="cta-${idPrefix}">
-            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1" y="3" width="12" height="9" rx="1.5"/><polyline points="1,3 7,8.5 13,3"/></svg>
-            ${t('solicita')}
-          </a>
+    </div>`;
+
+  const cardHtml = `
+    <div class="svc-card${isBlocked ? ' svc-card-blocked' : ''}" data-svc-id="${idPrefix}" data-base-price="${basePrice}" data-currency="${currency}" data-discount-pct="${pct}">
+      <div class="svc-card-inner">
+        <div class="svc-card-left">
+          <div class="svc-card-eyebrow"><span class="svc-card-brand">FLORINDEV · WEB SERVICE</span></div>
+          <div class="svc-card-title-row">
+            <div class="svc-card-icon-wrap ${iconClass}">${_svcIconSvg(svc)}</div>
+            <div><h2 class="svc-card-title">${svc.name || ''}</h2>${badge}</div>
+          </div>
+          ${tagline ? `<p class="svc-card-tagline">${tagline}</p>` : ''}
+          ${creator}
+          ${metaBadges.length ? `<div class="svc-meta-badges">${metaBadges.join('')}</div>` : ''}
+          ${feats ? `<div class="svc-feat-list">${feats}</div>` : ''}
+          ${extrasHtml}
+          ${statusBannerHtml}
+        </div>
+        ${rightPanelHtml}
+      </div>
+    </div>`;
+
+  if (!inAccordion) return cardHtml;
+
+  // Accordion wrapper
+  const priceDisplay = svc.price ? `${currency}${svc.price}` : '';
+  return `
+    <div class="svc-item" data-svc-item="${idPrefix}">
+      <div class="svc-item-header" onclick="_svcToggle(this)" role="button" tabindex="0" aria-expanded="false">
+        <div class="svc-item-header-left">
+          <div class="svc-item-icon-wrap ${iconClass}">${_svcIconSvg(svc)}</div>
+          <div class="svc-item-info">
+            <span class="svc-item-name">${svc.name || ''}</span>
+            ${svc.badge ? `<span class="svc-badge ${badgeCls}">${svc.badge}</span>` : ''}
+          </div>
+        </div>
+        <div class="svc-item-header-right">
+          ${priceDisplay ? `<span class="svc-item-price">${priceDisplay}</span>` : ''}
+          <svg class="svc-item-chevron" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3,5 7,9 11,5"/></svg>
+        </div>
+      </div>
+      <div class="svc-item-body">
+        <div class="svc-item-body-inner">
+          ${cardHtml}
         </div>
       </div>
     </div>`;
 }
 
+// Renders only the inner .svc-card (no outer accordion header) — used in feed cards
+function _svcCardOnlyHtml(svc, idPrefix) {
+  return _svcCardHtmlCore(svc, idPrefix, false);
+}
+
+function _svcRowHtml(svc, idPrefix) {
+  return _svcCardHtmlCore(svc, idPrefix, true);
+}
+
 window._svcUpdateTotal = function(idPrefix) {
-  const row      = document.querySelector(`.svc-row[data-svc-id="${idPrefix}"]`);
-  if (!row) return;
-  const base     = parseFloat(row.dataset.basePrice) || 0;
-  const currency = row.dataset.currency || '€';
+  const card     = document.querySelector(`.svc-card[data-svc-id="${idPrefix}"]`);
+  if (!card) return;
+  const base     = parseFloat(card.dataset.basePrice) || 0;
+  const currency = card.dataset.currency || '€';
+  const discPct  = parseFloat(card.dataset.discountPct) || 0;
   let extra = 0;
-  row.querySelectorAll('.svc-extra-row').forEach(exRow => {
-    if (exRow.querySelector('.svc-extra-chk')?.checked && exRow.dataset.free !== 'true') {
-      extra += parseFloat(exRow.dataset.price) || 0;
+  const selectedExtras = [];
+
+  card.querySelectorAll('.svc-extra-row').forEach(exRow => {
+    // Skip sub-addon rows — they are handled together with their parent
+    if (exRow.classList.contains('svc-subaddon-row')) return;
+    const checked = exRow.querySelector('.svc-extra-chk')?.checked;
+    if (checked) {
+      if (exRow.dataset.free !== 'true') {
+        extra += parseFloat(exRow.dataset.price) || 0;
+      }
+      const label = exRow.querySelector('.svc-extra-label')?.textContent?.trim() || exRow.dataset.label || '';
+      const price = exRow.dataset.free === 'true' ? null : (parseFloat(exRow.dataset.price) || 0);
+      selectedExtras.push({ label, price, currency: exRow.dataset.currency || currency });
+
+      // Include checked sub-addons under this parent
+      const parentIdx = exRow.dataset.idx;
+      card.querySelectorAll(`.svc-subaddon-row[data-parent-idx="${parentIdx}"]`).forEach(subRow => {
+        const subChecked = subRow.querySelector('.svc-subaddon-chk')?.checked;
+        if (subChecked) {
+          if (subRow.dataset.free !== 'true') {
+            extra += parseFloat(subRow.dataset.price) || 0;
+          }
+          const subLabel = subRow.querySelector('.svc-extra-label')?.textContent?.trim() || subRow.dataset.label || '';
+          const subPrice = subRow.dataset.free === 'true' ? null : (parseFloat(subRow.dataset.price) || 0);
+          selectedExtras.push({ label: `↳ ${subLabel}`, price: subPrice, currency: subRow.dataset.currency || currency, isSubAddon: true });
+        }
+      });
     }
   });
-  const total    = base + extra;
-  const priceEl  = document.getElementById('price-' + idPrefix);
-  const totalEl  = document.getElementById('total-' + idPrefix);
-  if (priceEl) priceEl.textContent = currency + (total || base || '');
-  if (totalEl) {
-    if (extra > 0) {
-      totalEl.style.display = '';
-      totalEl.textContent = 'Total: ' + currency + total;
+
+  // Apply discount to base price; extras already store effective (discounted) prices
+  const effectiveBase = discPct > 0 ? Math.round(base * (1 - discPct / 100)) : base;
+  const rawTotal    = effectiveBase + extra;
+  const finalTotal  = rawTotal;
+  const totalEl = document.getElementById('total-' + idPrefix);
+  const addonsEl = document.getElementById('pkg-addons-' + idPrefix);
+  const emptyEl  = document.getElementById('pkg-empty-' + idPrefix);
+
+  // Update total display (with discount applied to full subtotal)
+  if (totalEl) _animatePrice(totalEl, finalTotal, currency);
+
+  // Update add-ons summary panel
+  if (addonsEl) {
+    if (selectedExtras.length === 0) {
+      addonsEl.innerHTML = `<div class="svc-pkg-empty" id="pkg-empty-${idPrefix}">${window.siteLang === 'ro' ? 'Niciun extra selectat' : 'No add-ons selected yet'}</div>`;
     } else {
-      totalEl.style.display = 'none';
+      addonsEl.innerHTML = selectedExtras.map(ex => `
+        <div class="svc-pkg-addon-line${ex.isSubAddon ? ' svc-pkg-addon-sub' : ''}">
+          <span class="svc-pkg-addon-name">${ex.label}</span>
+          <span class="svc-pkg-addon-price">${ex.price === null ? `<span style="color:var(--green);font-size:11px;font-weight:600">${window.siteLang==='ro'?'Gratuit':'Free'}</span>` : `+${ex.currency}${ex.price}`}</span>
+        </div>`).join('');
     }
   }
+
   // Update mailto with selected extras
   const ctaEl = document.getElementById('cta-' + idPrefix);
   if (ctaEl) {
-    const selected = [];
-    row.querySelectorAll('.svc-extra-row').forEach(exRow => {
-      if (exRow.querySelector('.svc-extra-chk')?.checked) {
-        selected.push(exRow.querySelector('.svc-extra-label')?.textContent?.trim());
-      }
-    });
-    const svcName = row.querySelector('.svc-row-name')?.textContent?.trim() || '';
-    const subject = selected.length
-      ? `${svcName} + ${selected.join(', ')}`
+    const svcName = card.querySelector('.svc-card-title')?.textContent?.trim() || '';
+    const subject = selectedExtras.length
+      ? `${svcName} + ${selectedExtras.map(e => e.label).join(', ')}`
       : svcName;
     ctaEl.href = `mailto:${_contactEmail}?subject=${encodeURIComponent(subject)}`;
   }
 };
 
-function _svcInitAccordion(container) {
-  container.querySelectorAll('.svc-row-main').forEach(main => {
-    main.addEventListener('click', () => {
-      const row     = main.closest('.svc-row');
-      const wasOpen = row.classList.contains('open');
-      row.closest('.svc-list').querySelectorAll('.svc-row').forEach(r => r.classList.remove('open'));
-      if (!wasOpen) row.classList.add('open');
+// Toggle sub-addon rows enabled/visible when parent addon is checked/unchecked
+window._svcToggleSubAddons = function(parentChk, idPrefix) {
+  const parentRow  = parentChk.closest('.svc-extra-row');
+  if (!parentRow) return;
+  const parentIdx  = parentRow.dataset.idx;
+  const card       = document.querySelector(`.svc-card[data-svc-id="${idPrefix}"]`);
+  if (!card) return;
+  const isChecked  = parentChk.checked;
+  const subGroup   = card.querySelector(`.svc-subaddons-group[data-parent-idx="${parentIdx}"]`);
+  if (!subGroup) return;
+
+  if (isChecked) {
+    subGroup.classList.add('open');
+    subGroup.querySelectorAll('.svc-subaddon-chk').forEach(chk => { chk.disabled = false; });
+  } else {
+    subGroup.classList.remove('open');
+    subGroup.querySelectorAll('.svc-subaddon-chk').forEach(chk => {
+      chk.checked  = false;
+      chk.disabled = true;
     });
+    // Re-run total since sub-addons got unchecked
+    _svcUpdateTotal(idPrefix);
+  }
+};
+
+window._svcToggle = function(headerEl) {
+  const item = headerEl.closest('.svc-item');
+  if (!item) return;
+  const isOpen = item.classList.contains('open');
+
+  // Close all siblings first
+  const list = item.closest('.svc-list');
+  if (list) {
+    list.querySelectorAll('.svc-item.open').forEach(el => {
+      if (el !== item) {
+        el.classList.remove('open');
+        el.querySelector('.svc-item-header')?.setAttribute('aria-expanded', 'false');
+        const body = el.querySelector('.svc-item-body');
+        if (body) body.style.maxHeight = '0';
+      }
+    });
+  }
+
+  if (isOpen) {
+    item.classList.remove('open');
+    headerEl.setAttribute('aria-expanded', 'false');
+    const body = item.querySelector('.svc-item-body');
+    if (body) body.style.maxHeight = '0';
+  } else {
+    item.classList.add('open');
+    headerEl.setAttribute('aria-expanded', 'true');
+    const body = item.querySelector('.svc-item-body');
+    if (body) {
+      body.style.maxHeight = body.scrollHeight + 'px';
+    }
+    // Initialize total on first open
+    const card = item.querySelector('.svc-card[data-svc-id]');
+    if (card && card.dataset.svcId) _svcUpdateTotal(card.dataset.svcId);
+    // Scroll into view nicely
+    setTimeout(() => item.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+  }
+};
+
+function _svcInitAccordion(container) {
+  // All cards start collapsed. Open the first one.
+  container.querySelectorAll('.svc-item').forEach((item, idx) => {
+    const body = item.querySelector('.svc-item-body');
+    if (body) body.style.maxHeight = '0';
+    if (idx === 0) {
+      // Open first item after a tick so the DOM is ready
+      setTimeout(() => {
+        const header = item.querySelector('.svc-item-header');
+        if (header) _svcToggle(header);
+      }, 80);
+    }
   });
 }
+
+// ── SERVICES FEED — shared loaded list ────────────────────────────────────
+let _svcLoadedList = null; // cached normalized list after first load
 
 async function loadServices() {
   try {
@@ -2182,15 +2529,12 @@ async function loadServices() {
     }
     const d = snap.data();
 
-    // ── GUARANTEE BANNER ──────────────────────────────────────────────────
-    // Reads d.guarantee: { active, icon, color, text: {ro,en} }
+    // ── GUARANTEE BANNER ────────────────────────────────────────────────
     const guaranteeEl = document.getElementById('svc-guarantee');
     if (guaranteeEl) {
       const g = d.guarantee || {};
       if (g.active) {
         const gText = _langVal(g, 'text') || (typeof g.text === 'string' ? g.text : '') || '';
-
-        // Color map → CSS vars for the banner
         const COLOR_MAP = {
           green:  { bg: 'rgba(34,197,94,.08)',  border: 'rgba(34,197,94,.25)',  color: '#4ade80' },
           blue:   { bg: 'rgba(59,130,246,.08)', border: 'rgba(59,130,246,.25)', color: '#93c5fd' },
@@ -2199,8 +2543,6 @@ async function loadServices() {
           red:    { bg: 'rgba(239,68,68,.08)',  border: 'rgba(239,68,68,.25)',  color: '#f87171' },
         };
         const clr = COLOR_MAP[g.color] || COLOR_MAP.green;
-
-        // Icon SVG map — must match admin's GUARANTEE_ICONS keys
         const GUARANTEE_SVG = {
           shield:   '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="width:15px;height:15px;flex-shrink:0;margin-top:1px"><path d="M8 1.5L2 4v5c0 3 2.5 5.5 6 6 3.5-.5 6-3 6-6V4L8 1.5z"/><polyline points="5.5,8 7.5,10 11,6" stroke-width="1.4"/></svg>',
           star:     '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="width:15px;height:15px;flex-shrink:0;margin-top:1px"><polygon points="8,2 10,6 14,6.5 11,9.5 12,14 8,11.5 4,14 5,9.5 2,6.5 6,6"/></svg>',
@@ -2210,97 +2552,410 @@ async function loadServices() {
           lock:     '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="width:15px;height:15px;flex-shrink:0;margin-top:1px"><rect x="3.5" y="7" width="9" height="7.5" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>',
         };
         const iconSvg = GUARANTEE_SVG[g.icon] || GUARANTEE_SVG.shield;
-
         guaranteeEl.style.display = '';
-        guaranteeEl.style.background   = clr.bg;
-        guaranteeEl.style.borderColor  = clr.border;
-        guaranteeEl.style.color        = clr.color;
+        guaranteeEl.style.background  = clr.bg;
+        guaranteeEl.style.borderColor = clr.border;
+        guaranteeEl.style.color       = clr.color;
         guaranteeEl.innerHTML = `${iconSvg}<span>${gText}</span>`;
       } else {
         guaranteeEl.style.display = 'none';
       }
     }
 
-    const tabsEl  = document.getElementById('svc-tabs');
     const panelEl = document.getElementById('svc-panel');
+    const tabsEl  = document.getElementById('svc-tabs');
     if (!panelEl) return;
 
+    // Hide old tabs — feed replaces them
+    if (tabsEl) tabsEl.style.display = 'none';
+
     const list = rawList.map(_svcNormalize).sort((a, b) => a.order - b.order);
+    _svcLoadedList = list;
 
     // Update home page services teaser
     renderHomeSvcTeaser(list);
 
-    // Legacy category tabs — only when older data still has categories
-    const cats = [];
-    list.forEach(svc => {
-      const cat = svc.category;
-      if (cat && !cats.includes(cat)) cats.push(cat);
-    });
-    const hasMultipleCats = cats.length > 1;
-
-    if (tabsEl) {
-      if (hasMultipleCats) {
-        tabsEl.style.display = '';
-        const allCats = [...cats, '__all__'];
-        tabsEl.innerHTML = allCats.map((c, i) => {
-          const label = c === '__all__' ? 'Toate' : c;
-          return `<div class="svc-tab${i === 0 ? ' active' : ''}" data-svc-cat="${c}" role="tab">${label}</div>`;
-        }).join('');
-      } else {
-        tabsEl.style.display = 'none';
-        tabsEl.innerHTML = '';
-      }
-    }
-
-    let html = '';
-
-    if (hasMultipleCats) {
-      cats.forEach((cat, ci) => {
-        const items = list.filter(s => s.category === cat);
-        html += `<div class="svc-cat${ci === 0 ? ' visible' : ''}" id="svc-cat-${_slugify(cat)}">
-          <div class="svc-list">
-            ${items.map((svc, si) => _svcRowHtml(svc, `${_slugify(cat)}-${si}`)).join('')}
-          </div>
-        </div>`;
-      });
-      html += `<div class="svc-cat" id="svc-cat-all">
-        <div class="svc-list">
-          ${cats.map(cat => {
-            const items = list.filter(s => s.category === cat);
-            return `<div class="svc-section-label">${cat}</div>` +
-              items.map((svc, si) => _svcRowHtml(svc, `all-${_slugify(cat)}-${si}`)).join('');
-          }).join('')}
-        </div>
-      </div>`;
+    // Check if we're opening a specific service or category from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const idParam   = urlParams.get('id')  || '';
+    const catParam  = urlParams.get('cat') || '';
+    if (idParam) {
+      _renderSvcFeed(panelEl, list);
+      _doOpenService(idParam);
+    } else if (catParam) {
+      _renderSvcCatPage(panelEl, list, catParam);
     } else {
-      html = `<div class="svc-cat visible" id="svc-cat-main">
-        <div class="svc-list">
-          ${list.map((svc, i) => _svcRowHtml(svc, `svc-${i}`)).join('')}
-        </div>
-      </div>`;
-    }
-
-    panelEl.innerHTML = html;
-    panelEl.querySelectorAll('.svc-list').forEach(el => _svcInitAccordion(el));
-
-    if (hasMultipleCats && tabsEl) {
-      tabsEl.querySelectorAll('.svc-tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-          tabsEl.querySelectorAll('.svc-tab').forEach(t => t.classList.remove('active'));
-          panelEl.querySelectorAll('.svc-cat').forEach(s => s.classList.remove('visible'));
-          tab.classList.add('active');
-          const cat = tab.dataset.svcCat;
-          const targetId = cat === '__all__' ? 'svc-cat-all' : `svc-cat-${_slugify(cat)}`;
-          const targetEl = document.getElementById(targetId);
-          if (targetEl) targetEl.classList.add('visible');
-        });
-      });
+      _renderSvcFeed(panelEl, list);
     }
 
   } catch(e) {
     console.warn('Could not load services:', e);
   }
 }
+
+// ── SERVICES FEED RENDERER ─────────────────────────────────────────────────
+function _renderSvcFeed(panelEl, list) {
+  // Build category map: key → { label, services[] }
+  const catMap = new Map();
+  const uncategorized = [];
+
+  list.forEach(svc => {
+    const catKey = svc.category
+      ? (typeof svc.category === 'object' ? (svc.category.key || '') : svc.category)
+      : '';
+    if (!catKey) { uncategorized.push(svc); return; }
+    if (!catMap.has(catKey)) {
+      // Prefer the object form for a richer label; fall back to humanizing the key
+      const catObj = typeof svc.category === 'object' ? svc.category : null;
+      let catLabel;
+      if (catObj) {
+        catLabel = window.siteLang === 'ro' ? (catObj.ro || catObj.en || catKey) : (catObj.en || catObj.ro || catKey);
+      } else {
+        // Humanize slug: "web-dev" → "Web Development"
+        const knownLabels = {
+          'web-dev':   { ro: 'Dezvoltare Web', en: 'Web Development' },
+          'mobile':    { ro: 'Aplicații Mobile', en: 'Mobile Apps' },
+          'design':    { ro: 'Design', en: 'Design' },
+          'seo':       { ro: 'SEO', en: 'SEO' },
+          'marketing': { ro: 'Marketing', en: 'Marketing' },
+          'support':   { ro: 'Suport', en: 'Support' },
+        };
+        const known = knownLabels[catKey];
+        if (known) {
+          catLabel = window.siteLang === 'ro' ? known.ro : known.en;
+        } else {
+          catLabel = catKey.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+      }
+      catMap.set(catKey, { label: catLabel, key: catKey, svcs: [], catObj });
+    } else if (!catMap.get(catKey).catObj && typeof svc.category === 'object') {
+      // Upgrade label if we now have the object form
+      const catObj = svc.category;
+      const catLabel = window.siteLang === 'ro' ? (catObj.ro || catObj.en || catKey) : (catObj.en || catObj.ro || catKey);
+      catMap.get(catKey).label = catLabel;
+      catMap.get(catKey).catObj = catObj;
+    }
+    catMap.get(catKey).svcs.push(svc);
+  });
+
+  // If no categories at all, render as single accordion list
+  if (catMap.size === 0) {
+    const html = `<div class="svc-feed"><div class="svc-feed-section"><div class="svc-feed-grid">${
+      list.map((svc, i) => _svcFeedCardHtml(svc, `svc-${i}`, list.length > 5, i)).join('')
+    }</div></div></div>`;
+    panelEl.innerHTML = html;
+    _svcFeedInitAll(panelEl);
+    return;
+  }
+
+  // Sort categories by service count desc
+  const sortedCats = [...catMap.values()].sort((a, b) => b.svcs.length - a.svcs.length);
+
+  const sectionsHtml = sortedCats.map(cat => {
+    const MAX_SHOWN = 5;
+    // Sort services within category by feature count desc
+    const sorted = [...cat.svcs].sort((a, b) => (b.features?.length || 0) - (a.features?.length || 0));
+    const visible = sorted.slice(0, MAX_SHOWN);
+    const hasMore = sorted.length > MAX_SHOWN;
+    const catSlug = _slugify(cat.key);
+    const showAllBtn = hasMore
+      ? `<button class="svc-feed-show-all" onclick="_svcNavToCat('${catSlug}')" title="${window.siteLang==='ro'?'Toate din această categorie':'All in this category'}">
+           <span>${window.siteLang==='ro'?'Vezi toate':'See all'} (${sorted.length})</span>
+           <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="3,6 9,6"/><polyline points="6,3 9,6 6,9"/></svg>
+         </button>`
+      : '';
+
+    return `
+      <div class="svc-feed-section" id="svc-fsec-${catSlug}">
+        <div class="svc-feed-header">
+          <span class="svc-feed-cat-name">${cat.label}</span>
+          <span class="svc-feed-count">${sorted.length}</span>
+          ${showAllBtn}
+        </div>
+        <div class="svc-feed-grid">
+          ${visible.map((svc, i) => _svcFeedCardHtml(svc, `${catSlug}-${i}`, false, i)).join('')}
+        </div>
+      </div>`;
+  }).join('');
+
+  // Add uncategorized at end if any
+  let uncatHtml = '';
+  if (uncategorized.length) {
+    const uncatSorted = [...uncategorized].sort((a, b) => (b.features?.length || 0) - (a.features?.length || 0));
+    uncatHtml = `
+      <div class="svc-feed-section" id="svc-fsec-other">
+        <div class="svc-feed-header">
+          <span class="svc-feed-cat-name">${window.siteLang==='ro'?'Alte servicii':'Other services'}</span>
+          <span class="svc-feed-count">${uncatSorted.length}</span>
+        </div>
+        <div class="svc-feed-grid">
+          ${uncatSorted.map((svc, i) => _svcFeedCardHtml(svc, `other-${i}`, false, i)).join('')}
+        </div>
+      </div>`;
+  }
+
+  panelEl.innerHTML = `<div class="svc-feed">${sectionsHtml}${uncatHtml}</div>`;
+  _svcFeedInitAll(panelEl);
+}
+
+// ── CATEGORY DRILL-DOWN ────────────────────────────────────────────────────
+function _renderSvcCatPage(panelEl, list, catKey) {
+  // Find category label
+  let catLabel = catKey;
+  const catSvcs = list.filter(svc => {
+    const k = svc.category
+      ? (typeof svc.category === 'object' ? (svc.category.key || '') : svc.category)
+      : '';
+    if (k === catKey) {
+      if (typeof svc.category === 'object') {
+        catLabel = window.siteLang === 'ro'
+          ? (svc.category.ro || svc.category.en || catKey)
+          : (svc.category.en || svc.category.ro || catKey);
+      }
+      return true;
+    }
+    return false;
+  });
+
+  // Sort by feature count desc
+  const sorted = [...catSvcs].sort((a, b) => (b.features?.length || 0) - (a.features?.length || 0));
+
+  panelEl.innerHTML = `
+    <div class="svc-cat-page-header">
+      <button class="svc-cat-page-back" onclick="_svcNavToFeed()">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="9,2 4,7 9,12"/></svg>
+        <span>${window.siteLang==='ro'?'Servicii':'Services'}</span>
+      </button>
+      <span style="color:var(--text-3);font-size:12px">/</span>
+      <span class="svc-cat-page-title">${catLabel}</span>
+    </div>
+    <div class="svc-cat-page-list">
+      ${sorted.map((svc, i) => _svcRowHtml(svc, `catpage-${catKey}-${i}`)).join('')}
+    </div>`;
+
+  panelEl.querySelectorAll('.svc-cat-page-list').forEach(el => _svcInitAccordion(el));
+}
+
+window._svcNavToCat = function(catSlug) {
+  _navTo('servicii', { cat: catSlug });
+  const panelEl = document.getElementById('svc-panel');
+  if (panelEl && _svcLoadedList) _renderSvcCatPage(panelEl, _svcLoadedList, catSlug);
+};
+
+window._svcNavToFeed = function() {
+  _navTo('servicii', { cat: null });
+  const panelEl = document.getElementById('svc-panel');
+  if (panelEl && _svcLoadedList) _renderSvcFeed(panelEl, _svcLoadedList);
+};
+
+// ── FEED CARD HTML — clicking opens popup, no expand-in-place ─────────────
+function _svcFeedCardHtml(svc, idPrefix) {
+  const iconClass = _svcIconClass(svc.badge);
+  const currency  = svc.currency || '€';
+  const basePrice = parseFloat(svc.price) || 0;
+  const desc      = svc.desc || '';
+  const badgeCls  = _svcBadgeClass(svc.badge);
+  const svcId     = svc.id || _slugify(svc.name);
+  const isRo      = window.siteLang === 'ro';
+  const status    = _svcEffectiveStatus(svc); // expired timelimited → 'expired' (treated as unavailable)
+
+  // expired behaves like unavailable in the feed card
+  const isBlocked = status === 'unavailable' || status === 'expired';
+
+  // ── Icon area: normal = plain icon; unavailable/expired = icon + lock overlay; timelimited = icon + clock overlay
+  const lockSvg  = `<svg class="hsc-state-overlay-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="7.5" width="10" height="7" rx="1.5"/><path d="M5.5 7.5V5.5a2.5 2.5 0 015 0v2"/></svg>`;
+  const clockSvg = `<svg class="hsc-state-overlay-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><polyline points="8,4.5 8,8 10.5,9.5"/></svg>`;
+
+  let iconWrap;
+  if (isBlocked) {
+    iconWrap = `<div class="hsc-icon-wrap hsc-state-unavailable">
+      <div class="hsc-icon ${iconClass}">${_svcIconSvg(svc)}</div>
+      <div class="hsc-state-badge hsc-state-badge-lock">${lockSvg}</div>
+    </div>`;
+  } else if (status === 'timelimited') {
+    iconWrap = `<div class="hsc-icon-wrap hsc-state-timelimited">
+      <div class="hsc-icon ${iconClass}">${_svcIconSvg(svc)}</div>
+      <div class="hsc-state-badge hsc-state-badge-clock">${clockSvg}</div>
+    </div>`;
+  } else {
+    iconWrap = `<div class="hsc-icon-wrap">
+      <div class="hsc-icon ${iconClass}">${_svcIconSvg(svc)}</div>
+    </div>`;
+  }
+
+  // ── Price display per state
+  let priceHtml = '';
+  if (isBlocked) {
+    const blockedLabel = status === 'expired'
+      ? (isRo ? 'Expirat' : 'Expired')
+      : (isRo ? 'Indisponibil' : 'Unavailable');
+    priceHtml = `<div class="hsc-price hsc-price-unavailable">
+      <span class="hsc-unavail-label">${blockedLabel}</span>
+    </div>`;
+  } else if (status === 'discount' && svc.price) {
+    const pct = parseFloat(svc.discountPct) || 0;
+    const discounted = pct > 0 ? Math.round(basePrice * (1 - pct / 100)) : basePrice;
+    priceHtml = `<div class="hsc-price hsc-price-discount">
+      <span class="hsc-price-original">${currency}${basePrice}</span>
+      <span class="hsc-price-new">${currency}${discounted}</span>
+    </div>`;
+  } else if (status === 'timelimited' && svc.price) {
+    const countdownId = `hsc-cd-${idPrefix}`;
+    priceHtml = `<div class="hsc-price hsc-price-timelimited">
+      <span class="hsc-price-val">${currency}${basePrice}</span>
+      <span class="hsc-countdown" id="${countdownId}" data-limit="${svc.limitDate || ''}">${isRo ? 'calcul…' : 'calc…'}</span>
+    </div>`;
+  } else if (svc.price) {
+    priceHtml = `<div class="hsc-price">${currency}${basePrice}</div>`;
+  }
+
+  // ── State label span (shown below name when not normal)
+  let stateLabel = '';
+  if (status === 'discount' && svc.discountPct) {
+    stateLabel = `<span class="hsc-state-label hsc-state-label-discount">-${Math.round(svc.discountPct)}% ${isRo ? 'reducere' : 'off'}</span>`;
+  } else if (status === 'timelimited' && svc.limitDate) {
+    stateLabel = `<span class="hsc-state-label hsc-state-label-timelimit">${isRo ? 'Ofertă limitată' : 'Limited offer'}</span>`;
+  }
+
+  // Map expired → unavailable for CSS class (same visual treatment)
+  const cssStatus = isBlocked ? 'unavailable' : status;
+  const cardClass = cssStatus !== 'normal' ? `home-svc-card svc-feed-item hsc-state-${cssStatus}` : 'home-svc-card svc-feed-item';
+
+  return `
+    <div class="${cardClass}" data-feed-id="${idPrefix}" data-status="${status}"
+         onclick="openService('${svcId}')"
+         role="button" tabindex="0"
+         onkeydown="if(event.key==='Enter'||event.key===' ')openService('${svcId}')">
+      <div class="hsc-row">
+        ${iconWrap}
+        <div class="hsc-info">
+          <div class="hsc-name">${svc.name || ''}${svc.badge ? ` <span class="svc-badge ${badgeCls}" style="font-size:9px;padding:1px 5px">${svc.badge}</span>` : ''}</div>
+          ${stateLabel}
+          ${desc ? `<div class="hsc-desc">${desc}</div>` : ''}
+        </div>
+        ${priceHtml}
+      </div>
+    </div>`;
+}
+
+function _svcFeedInitAll(panelEl) {
+  // Init countdown timers for timelimited cards
+  panelEl.querySelectorAll('.hsc-countdown[data-limit]').forEach(el => {
+    _svcStartCountdown(el);
+  });
+}
+
+function _svcStartCountdown(el) {
+  const isRo = window.siteLang === 'ro';
+  function tick() {
+    const limitStr = el.dataset.limit;
+    if (!limitStr) { el.textContent = ''; return; }
+    const end  = new Date(limitStr);
+    const now  = new Date();
+    const diff = end - now;
+    if (isNaN(diff) || diff <= 0) {
+      el.textContent = isRo ? 'Expirat' : 'Expired';
+      el.style.color = 'var(--red, #f87171)';
+      return;
+    }
+    const d = Math.floor(diff / 86400000);
+    const h = Math.floor((diff % 86400000) / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    if (d > 0) {
+      el.textContent = isRo ? `${d}z ${h}h ramas` : `${d}d ${h}h left`;
+    } else if (h > 0) {
+      el.textContent = isRo ? `${h}h ${m}m ramas` : `${h}h ${m}m left`;
+    } else {
+      el.textContent = isRo ? `${m}m ${s}s ramas` : `${m}m ${s}s left`;
+    }
+    // Use requestAnimationFrame-based interval
+    setTimeout(() => { if (document.contains(el)) tick(); }, 1000);
+  }
+  tick();
+}
+
+// ── SERVICE PAGE (URL-based, mirrors openProject / closeProject) ───────────
+let _svcPopupIdCounter = 0;
+
+// Opens service by slug — pushes ?page=servicii&id=SLUG to history
+window.openService = function(svcId) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('page', 'servicii');
+  url.searchParams.set('id', svcId);
+  url.searchParams.delete('cat');
+  window.history.pushState(null, '', url.pathname + url.search);
+  // Ensure the services page is active and feed rendered before opening panel
+  _activatePage('servicii');
+  const panelEl = document.getElementById('svc-panel');
+  if (panelEl && _svcLoadedList && !panelEl.querySelector('.svc-feed')) {
+    _renderSvcFeed(panelEl, _svcLoadedList);
+  }
+  _doOpenService(svcId);
+};
+
+// Internal: find service in loaded list by id slug and render the panel
+function _doOpenService(svcId) {
+  if (!_svcLoadedList) return;
+  const svc = _svcLoadedList.find(s => s.id === svcId);
+  if (!svc) return;
+  _renderSvcPanel(svc);
+}
+
+function _renderSvcPanel(svc) {
+  const idPrefix = `spop-${++_svcPopupIdCounter}`;
+
+  const crumb    = document.getElementById('svc-popup-crumb');
+  const badgeW   = document.getElementById('svc-popup-badge-wrap');
+  const body     = document.getElementById('svc-popup-body');
+  const backdrop = document.getElementById('svc-popup-backdrop');
+  const page     = document.getElementById('svc-popup-page');
+  if (!body || !backdrop || !page) return;
+
+  if (crumb)  crumb.textContent = svc.name || '';
+  if (badgeW) {
+    const badgeCls = _svcBadgeClass(svc.badge);
+    badgeW.innerHTML = svc.badge
+      ? `<span class="svc-badge ${badgeCls}">${svc.badge}</span>`
+      : '';
+  }
+
+  body.innerHTML = _svcCardOnlyHtml(svc, idPrefix);
+  _svcUpdateTotal(idPrefix);
+
+  backdrop.classList.add('open');
+  requestAnimationFrame(() => page.classList.add('open'));
+  document.body.style.overflow = 'hidden';
+
+  document.title = (svc.name || 'Serviciu') + ' · FlorinDev';
+}
+
+window.closeService = function(e) {
+  // When called from onclick on backdrop, only close if clicking the backdrop itself
+  if (e && e.target !== document.getElementById('svc-popup-backdrop')) return;
+  const backdrop = document.getElementById('svc-popup-backdrop');
+  const page     = document.getElementById('svc-popup-page');
+  if (!backdrop || !page || !page.classList.contains('open')) return;
+
+  const url = new URL(window.location.href);
+  url.searchParams.set('page', 'servicii');
+  url.searchParams.delete('id');
+  window.history.pushState(null, '', url.pathname + url.search);
+
+  page.classList.remove('open');
+  setTimeout(() => { backdrop.classList.remove('open'); document.body.style.overflow = ''; }, 300);
+  document.title = (window.siteLang === 'ro' ? 'Servicii' : 'Services') + ' · FlorinDev';
+};
+
+// Legacy aliases
+window.openSvcPopup  = window.openService;
+window.closeSvcPopup = window.closeService;
+
+// Close on Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('svc-popup-page')?.classList.contains('open'))
+    window.closeService({ target: document.getElementById('svc-popup-backdrop') });
+});
 
 function _slugify(s) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -2457,35 +3112,25 @@ function renderHomeSvcTeaser(list) {
   const section = document.getElementById('home-svc-section');
   const grid = document.getElementById('home-svc-grid');
   if (!grid || !section) return;
-  const top3 = list.slice(0, 3);
+
+  // Filter out unavailable/expired services — they should not appear on home
+  const visible = list.filter(svc => {
+    const eff = _svcEffectiveStatus(svc);
+    return eff !== 'unavailable' && eff !== 'expired';
+  });
+
+  const top3 = visible.slice(0, 3);
   if (!top3.length) {
     section.style.display = 'none';
     return;
   }
-  const SVC_ICON_SVG = {
-    serviciu:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`,
-    produs:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9z"/><path d="M12 11l8-4.5M12 11v9M12 11L4 6.5"/></svg>`,
-    abonament: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M12 6v6l4 2"/></svg>`,
-    pachet:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="17"/><line x1="9.5" y1="14.5" x2="14.5" y2="14.5"/></svg>`,
-  };
-  grid.innerHTML = top3.map(svc => {
-    const iconHtml = svc.icon && svc.icon.startsWith('ti-')
-      ? `<i class="ti ${svc.icon}" style="font-size:22px"></i>`
-      : (SVC_ICON_SVG[svc.type] || SVC_ICON_SVG.serviciu);
-    const priceHtml = svc.price
-      ? `<div class="hsc-price">${svc.currency || '€'}${svc.price}</div>`
-      : '';
-    return `<div class="home-svc-card" role="button" tabindex="0"
-        onclick="_navTo('servicii');resolveRoute()"
-        onkeydown="if(event.key==='Enter'){_navTo('servicii');resolveRoute()}">
-      <div class="hsc-icon">${iconHtml}</div>
-      <div class="hsc-info">
-        <div class="hsc-name">${svc.name}</div>
-        <div class="hsc-desc">${svc.desc || ''}</div>
-      </div>
-      ${priceHtml}
-    </div>`;
-  }).join('');
+
+  // Reuse _svcFeedCardHtml so state rendering (discount, timelimited) is consistent
+  grid.innerHTML = top3.map((svc, i) => _svcFeedCardHtml(svc, `home-teaser-${i}`)).join('');
+
+  // Init countdown timers for any timelimited cards in the teaser
+  grid.querySelectorAll('.hsc-countdown[data-limit]').forEach(el => _svcStartCountdown(el));
+
   section.style.display = '';
 }
 
@@ -2788,3 +3433,545 @@ ${urlsXml}
 
 // Expose for console use: generateSitemap({ download: true })
 window.generateSitemap = generateSitemap;
+
+// ── CART SYSTEM ────────────────────────────────────────────────────────────
+// Cart item shape:
+// {
+//   cartId: string,         // unique cart entry id
+//   svcId: string,          // service slug
+//   svcName: string,
+//   basePrice: number,
+//   currency: string,
+//   discountPct: number,    // from service (not coupon)
+//   extras: [{label, price, currency, isSubAddon}],
+//   effectiveBasePrice: number,
+//   effectiveExtrasTotal: number,
+//   lineTotal: number,
+//   quantity: number,
+// }
+
+let _cart = [];
+let _coupon = null; // { code, pct } or null
+
+// ── Snapshot extras from a card ──────────────────────────────────────────
+function _svcSnapshotExtras(idPrefix) {
+  const card = document.querySelector(`.svc-card[data-svc-id="${idPrefix}"]`);
+  if (!card) return [];
+  const extras = [];
+  card.querySelectorAll('.svc-extra-row').forEach(exRow => {
+    if (exRow.classList.contains('svc-subaddon-row')) return;
+    const checked = exRow.querySelector('.svc-extra-chk')?.checked;
+    if (!checked) return;
+    const isFree = exRow.dataset.free === 'true';
+    const label = exRow.querySelector('.svc-extra-label')?.textContent?.trim() || exRow.dataset.label || '';
+    const price = isFree ? 0 : (parseFloat(exRow.dataset.price) || 0);
+    const currency = exRow.dataset.currency || '€';
+    extras.push({ label, price, currency, isSubAddon: false, isFree });
+    // sub-addons
+    const parentIdx = exRow.dataset.idx;
+    card.querySelectorAll(`.svc-subaddon-row[data-parent-idx="${parentIdx}"]`).forEach(subRow => {
+      const subChecked = subRow.querySelector('.svc-subaddon-chk')?.checked;
+      if (!subChecked) return;
+      const subIsFree = subRow.dataset.free === 'true';
+      const subLabel = subRow.querySelector('.svc-extra-label')?.textContent?.trim() || subRow.dataset.label || '';
+      const subPrice = subIsFree ? 0 : (parseFloat(subRow.dataset.price) || 0);
+      const subCurrency = subRow.dataset.currency || currency;
+      extras.push({ label: `↳ ${subLabel}`, price: subPrice, currency: subCurrency, isSubAddon: true, isFree: subIsFree });
+    });
+  });
+  return extras;
+}
+
+// ── Extras fingerprint for dedup check ───────────────────────────────────
+function _extrasKey(extras) {
+  return extras.map(e => `${e.label}|${e.price}|${e.isFree}`).sort().join(';;');
+}
+
+// ── Compute line total ────────────────────────────────────────────────────
+function _computeLineTotal(basePrice, discountPct, extras) {
+  const effBase = discountPct > 0 ? Math.round(basePrice * (1 - discountPct / 100)) : basePrice;
+  const effExtras = extras.reduce((s, e) => s + (e.isFree ? 0 : e.price), 0);
+  return effBase + effExtras;
+}
+
+// ── Add to cart from service card ────────────────────────────────────────
+window._svcAddToCart = function(idPrefix, svcId) {
+  const card = document.querySelector(`.svc-card[data-svc-id="${idPrefix}"]`);
+  if (!card) return;
+
+  const svcName = card.querySelector('.svc-card-title')?.textContent?.trim() || svcId;
+  const basePrice = parseFloat(card.dataset.basePrice) || 0;
+  const currency = card.dataset.currency || '€';
+  const discountPct = parseFloat(card.dataset.discountPct) || 0;
+  const extras = _svcSnapshotExtras(idPrefix);
+  const fingerprint = _extrasKey(extras);
+  const effBase = discountPct > 0 ? Math.round(basePrice * (1 - discountPct / 100)) : basePrice;
+  const lineTotal = _computeLineTotal(basePrice, discountPct, extras);
+
+  // Check for exact duplicate (same service + exact same extras)
+  const existing = _cart.find(item =>
+    item.svcId === svcId && _extrasKey(item.extras) === fingerprint
+  );
+
+  if (existing) {
+    existing.quantity += 1;
+    showToast(window.siteLang === 'ro' ? 'Cantitate mărită în coș ✓' : 'Quantity increased in cart ✓');
+  } else {
+    const cartId = `cart-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+    const iconWrap = card.querySelector('.svc-card-icon-wrap');
+    const svcIcon  = iconWrap ? iconWrap.innerHTML : '';
+    const iconClass = iconWrap ? (iconWrap.className.replace('svc-card-icon-wrap','').trim()) : '';
+    _cart.push({
+      cartId, svcId, svcName, basePrice, currency, discountPct,
+      extras, effectiveBasePrice: effBase,
+      effectiveExtrasTotal: extras.reduce((s, e) => s + (e.isFree ? 0 : e.price), 0),
+      lineTotal, quantity: 1, svcIcon, iconClass,
+    });
+    showToast(window.siteLang === 'ro' ? 'Adăugat în coș ✓' : 'Added to cart ✓');
+  }
+
+  _cartSave();
+  _cartUpdateBadge();
+
+  // Switch button to "Go to cart" state
+  _svcUpdateCartBtn(idPrefix);
+};
+
+// ── Update cart button state per service ──────────────────────────────────
+function _svcUpdateCartBtn(idPrefix) {
+  const btn = document.getElementById('cart-btn-' + idPrefix);
+  if (!btn) return;
+  const isRo = window.siteLang === 'ro';
+  // Check if this service is in the cart
+  const inCart = _cart.some(item => item.svcId === (idPrefix.replace(/^svc-/,'').replace(/-\d+$/,'')) || btn.dataset.svcId === item.svcId || idPrefix.includes(item.svcId) || item.cartId.includes(idPrefix) || true && (() => {
+    const card = document.querySelector(`.svc-card[data-svc-id="${idPrefix}"]`);
+    const svcName = card?.querySelector('.svc-card-title')?.textContent?.trim() || '';
+    return _cart.some(i => i.svcName === svcName);
+  })());
+  // Simpler: just check by svcName match
+  const card = document.querySelector(`.svc-card[data-svc-id="${idPrefix}"]`);
+  const svcName = card?.querySelector('.svc-card-title')?.textContent?.trim() || '';
+  const alreadyIn = _cart.some(i => i.svcName === svcName);
+  if (alreadyIn) {
+    btn.classList.add('cart-btn-added');
+    btn.innerHTML = `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="2,7 5.5,10.5 12,3"/></svg> ${isRo ? 'Vezi coșul' : 'Go to cart'} →`;
+    btn.onclick = openCart;
+  } else {
+    btn.classList.remove('cart-btn-added');
+    btn.innerHTML = `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="5.5" cy="12" r=".9"/><circle cx="10.5" cy="12" r=".9"/><path d="M1 2h1.7l2 6.5h5.5l1.5-4.5H3.5"/></svg> ${isRo ? 'Adaugă în coș' : 'Add to cart'}`;
+    btn.onclick = () => _svcAddToCart(idPrefix, btn.dataset.svcId || idPrefix);
+  }
+}
+
+// Call on page load to restore button states (e.g. after cart reload)
+function _svcRestoreAllCartBtns() {
+  document.querySelectorAll('.svc-pkg-cart-btn').forEach(btn => {
+    const card = btn.closest('.svc-card');
+    if (card) _svcUpdateCartBtn(card.dataset.svcId);
+  });
+}
+
+// ── Persist / restore ─────────────────────────────────────────────────────
+function _cartSave() {
+  try { localStorage.setItem('fd_cart_v1', JSON.stringify({ cart: _cart, coupon: _coupon })); } catch(e) {}
+}
+function _cartLoad() {
+  try {
+    const raw = localStorage.getItem('fd_cart_v1');
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    _cart   = Array.isArray(parsed.cart) ? parsed.cart : [];
+    _coupon = parsed.coupon || null;
+  } catch(e) {}
+}
+_cartLoad();
+
+// ── Badge update ──────────────────────────────────────────────────────────
+function _cartUpdateBadge() {
+  const btn   = document.getElementById('tb-cart-btn');
+  const label = document.getElementById('tb-cart-label');
+  const total = _cart.reduce((s, item) => s + item.quantity, 0);
+
+  if (!btn || !label) return;
+
+  if (total > 0) {
+    const count = total > 99 ? '99+' : total;
+    label.textContent = window.siteLang === 'ro'
+      ? `Coș · ${count}`
+      : `Cart · ${count}`;
+
+    btn.style.display = '';
+  } else {
+    label.textContent = window.siteLang === 'ro'
+      ? 'Coș'
+      : 'Cart';
+
+    btn.style.display = 'none';
+  }
+}
+_cartUpdateBadge();
+
+// ── Discount codes ────────────────────────────────────────────────────────
+const COUPON_CODES = {
+  'FLORIN10':  10,
+  'WELCOME15': 15,
+  'DEV20':     20,
+  'TITAN5':    5,
+};
+
+function _applyCoupon(code) {
+  const pct = COUPON_CODES[(code || '').toUpperCase().trim()];
+  if (!pct) return false;
+  _coupon = { code: code.toUpperCase().trim(), pct };
+  _cartSave();
+  return true;
+}
+
+function _removeCoupon() {
+  _coupon = null;
+  _cartSave();
+}
+
+// ── Cart total calculation ────────────────────────────────────────────────
+function _cartGrandTotal() {
+  let sub = _cart.reduce((s, item) => s + item.lineTotal * item.quantity, 0);
+  if (_coupon && _coupon.pct > 0) {
+    sub = Math.round(sub * (1 - _coupon.pct / 100));
+  }
+  return sub;
+}
+
+function _cartSubtotal() {
+  return _cart.reduce((s, item) => s + item.lineTotal * item.quantity, 0);
+}
+
+// ── Open / close cart ─────────────────────────────────────────────────────
+window.openCart = function() {
+  const backdrop = document.getElementById('cart-backdrop');
+  const page     = document.getElementById('cart-page');
+  if (!backdrop || !page) return;
+
+  _renderCartPage();
+  backdrop.classList.add('open');
+  requestAnimationFrame(() => page.classList.add('open'));
+  document.body.style.overflow = 'hidden';
+  document.title = 'Cart · FlorinDev';
+};
+
+window.closeCart = function(e) {
+  if (e && e.target !== document.getElementById('cart-backdrop')) return;
+  const backdrop = document.getElementById('cart-backdrop');
+  const page     = document.getElementById('cart-page');
+  if (!backdrop || !page || !page.classList.contains('open')) return;
+  page.classList.remove('open');
+  setTimeout(() => { backdrop.classList.remove('open'); document.body.style.overflow = ''; }, 300);
+  document.title = 'FlorinDev';
+};
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('cart-page')?.classList.contains('open'))
+    window.closeCart({ target: document.getElementById('cart-backdrop') });
+});
+
+// ── Cart page renderer ────────────────────────────────────────────────────
+function _renderCartPage() {
+  const body  = document.getElementById('cart-body');
+  const crumb = document.getElementById('cart-title-crumb');
+  const countBadge = document.getElementById('cart-item-count-badge');
+  const backLabel  = document.getElementById('cart-back-label');
+  const isRo = window.siteLang === 'ro';
+
+  if (backLabel) backLabel.textContent = isRo ? 'Servicii' : 'Services';
+  if (crumb)     crumb.textContent     = isRo ? 'Coș' : 'Cart';
+  if (!body) return;
+
+  const totalItems = _cart.reduce((s, i) => s + i.quantity, 0);
+  if (countBadge) {
+    countBadge.textContent = totalItems > 0
+      ? (isRo ? `${totalItems} ${totalItems === 1 ? 'articol' : 'articole'}` : `${totalItems} item${totalItems !== 1 ? 's' : ''}`)
+      : '';
+  }
+
+  if (_cart.length === 0) {
+    body.innerHTML = `
+      <div class="cart-empty">
+        <div class="cart-empty-icon">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="18" cy="40" r="3"/><circle cx="36" cy="40" r="3"/><path d="M4 6h4l6 22h20l4-14H10"/></svg>
+        </div>
+        <div class="cart-empty-title">${isRo ? 'Coșul tău este gol' : 'Your cart is empty'}</div>
+        <div class="cart-empty-sub">${isRo ? 'Adaugă servicii din pagina de servicii pentru a continua.' : 'Add services from the services page to continue.'}</div>
+        <button class="btn btn-accent cart-empty-cta" onclick="closeCart();_navTo('servicii');resolveRoute()">
+          ${isRo ? 'Explorează serviciile' : 'Explore services'}
+        </button>
+      </div>`;
+    return;
+  }
+
+  // ── Items list
+  const itemsHtml = _cart.map(item => {
+    const effBase   = item.effectiveBasePrice;
+    const extrasSum = item.effectiveExtrasTotal;
+    const lineTotal = item.lineTotal;
+    const hasDiscount = item.discountPct > 0;
+
+    const extrasHtml = item.extras.length
+      ? item.extras.map(ex => `
+          <div class="cart-item-extra${ex.isSubAddon ? ' cart-item-extra-sub' : ''}">
+            <span class="cart-item-extra-label">${ex.label}</span>
+            <span class="cart-item-extra-price">${ex.isFree
+              ? `<span style="color:var(--green);font-size:11px;font-weight:600">${isRo ? 'Gratuit' : 'Free'}</span>`
+              : `+${ex.currency}${ex.price}`
+            }</span>
+          </div>`).join('')
+      : `<div class="cart-item-no-extras">${isRo ? 'Fără extra-uri' : 'No add-ons'}</div>`;
+
+    const basePriceHtml = hasDiscount
+      ? `<span class="cart-item-base-orig">${item.currency}${item.basePrice}</span>
+         <span class="cart-item-base-eff">${item.currency}${effBase}</span>`
+      : `<span>${item.currency}${item.basePrice}</span>`;
+
+    return `
+      <div class="cart-item" data-cart-id="${item.cartId}">
+        <div class="cart-item-header">
+          <div class="cart-item-name-row">
+            <div class="cart-item-icon ${item.iconClass || ''}">
+  ${item.svcIcon || `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="1.5" width="11" height="11" rx="2"/><path d="M4.5 7h5M7 4.5v5"/></svg>`}
+</div>
+            <div>
+              <div class="cart-item-name">${item.svcName}</div>
+              ${hasDiscount ? `<div class="cart-item-discount-tag">-${Math.round(item.discountPct)}% ${isRo ? 'reducere aplicată' : 'discount applied'}</div>` : ''}
+            </div>
+          </div>
+          <button class="cart-item-remove" onclick="_cartRemoveItem('${item.cartId}')" title="${isRo ? 'Șterge' : 'Remove'}">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h10M5 4V2.5h4V4M5.5 6.5v4M8.5 6.5v4M3 4l.7 7.5h6.6L11 4"/></svg>
+          </button>
+        </div>
+
+        <div class="cart-item-details">
+          <div class="cart-item-base-row">
+            <span class="cart-item-label">${isRo ? 'Preț de bază' : 'Base price'}</span>
+            <span class="cart-item-base-price">${basePriceHtml}</span>
+          </div>
+          <div class="cart-item-extras-section">
+            <div class="cart-item-extras-label">${isRo ? 'Extra-uri' : 'Add-ons'}</div>
+            <div class="cart-item-extras-list">${extrasHtml}</div>
+          </div>
+        </div>
+
+        <div class="cart-item-footer">
+          <div class="cart-item-qty">
+            <button class="cart-qty-btn" onclick="_cartDecQty('${item.cartId}')">
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="2" y1="6" x2="10" y2="6"/></svg>
+            </button>
+            <span class="cart-qty-val" id="qty-${item.cartId}">${item.quantity}</span>
+            <button class="cart-qty-btn" onclick="_cartIncQty('${item.cartId}')">
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="6" y1="2" x2="6" y2="10"/><line x1="2" y1="6" x2="10" y2="6"/></svg>
+            </button>
+          </div>
+          <div class="cart-item-line-total">
+            <span class="cart-item-line-label">${isRo ? 'Subtotal' : 'Subtotal'}</span>
+            <span class="cart-item-line-val" id="line-${item.cartId}">${item.currency}${lineTotal * item.quantity}</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // ── Summary panel
+  const subtotal  = _cartSubtotal();
+  const hasCoupon = _coupon && _coupon.pct > 0;
+  const couponDiscount = hasCoupon ? Math.round(subtotal * _coupon.pct / 100) : 0;
+  const grandTotal = _cartGrandTotal();
+  const currency   = _cart[0]?.currency || '€';
+
+  const couponRowHtml = hasCoupon
+    ? `<div class="cart-summary-row cart-summary-coupon-applied">
+        <span>${isRo ? 'Cod' : 'Code'} <strong>${_coupon.code}</strong> (-${_coupon.pct}%)</span>
+        <span class="cart-summary-discount">-${currency}${couponDiscount}</span>
+       </div>
+       <button class="cart-coupon-remove-btn" onclick="_cartUiRemoveCoupon()">
+         ${isRo ? 'Elimină codul' : 'Remove code'}
+       </button>`
+    : '';
+
+  const couponInputHtml = hasCoupon ? '' : `
+    <div class="cart-coupon-wrap" id="cart-coupon-wrap">
+      <div class="cart-coupon-row">
+        <input class="cart-coupon-input" id="cart-coupon-input" type="text" placeholder="${isRo ? 'Cod reducere' : 'Discount code'}" />
+        <button class="btn btn-ghost cart-coupon-apply-btn" onclick="_cartUiApplyCoupon()">
+          ${isRo ? 'Aplică' : 'Apply'}
+        </button>
+      </div>
+      <div class="cart-coupon-msg" id="cart-coupon-msg"></div>
+    </div>`;
+
+  body.innerHTML = `
+    <div class="cart-layout">
+      <div class="cart-items-col">
+        <div class="cart-items-header">
+          <span class="cart-items-title">${isRo ? 'Servicii selectate' : 'Selected services'}</span>
+          <button class="cart-clear-btn" onclick="_cartClearAll()">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h10M5 4V2.5h4V4M5.5 6.5v4M8.5 6.5v4M3 4l.7 7.5h6.6L11 4"/></svg>
+            ${isRo ? 'Golește coșul' : 'Clear cart'}
+          </button>
+        </div>
+        <div class="cart-items-list">${itemsHtml}</div>
+      </div>
+
+      <div class="cart-summary-col">
+        <div class="cart-summary-box">
+          <div class="cart-summary-title">${isRo ? 'Rezumat comandă' : 'Order summary'}</div>
+
+          <div class="cart-summary-row">
+            <span>${isRo ? 'Subtotal' : 'Subtotal'}</span>
+            <span id="cart-subtotal">${currency}${subtotal}</span>
+          </div>
+          ${couponRowHtml}
+          ${hasCoupon ? `<div class="cart-summary-separator"></div>` : ''}
+          <div class="cart-summary-row cart-summary-total">
+            <span>Total</span>
+            <span id="cart-grand-total">${currency}${grandTotal}</span>
+          </div>
+
+          ${couponInputHtml}
+          ${!hasCoupon ? `<div class="cart-summary-separator"></div>` : ''}
+
+          <button class="btn btn-accent cart-checkout-btn" onclick="_cartCheckout()">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1" y="3" width="12" height="9" rx="1.5"/><polyline points="1,3 7,8.5 13,3"/></svg>
+            ${isRo ? 'Trimite cererea' : 'Send request'} ↗
+          </button>
+          <div class="cart-summary-note">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="5" width="10" height="7" rx="1"/><path d="M5 5V3.5a2 2 0 014 0V5"/></svg>
+            ${isRo ? 'Nicio plată acum — ofertă gratuită' : 'No payment now — free quote'}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── Cart item actions ─────────────────────────────────────────────────────
+window._cartRemoveItem = function(cartId) {
+  _cart = _cart.filter(i => i.cartId !== cartId);
+  _cartSave();
+  _cartUpdateBadge();
+  _renderCartPage();
+};
+
+window._cartIncQty = function(cartId) {
+  const item = _cart.find(i => i.cartId === cartId);
+  if (!item) return;
+  item.quantity = Math.min(item.quantity + 1, 99);
+  _cartSave();
+  _cartUpdateBadge();
+  _rerenderCartTotals(cartId);
+};
+
+window._cartDecQty = function(cartId) {
+  const item = _cart.find(i => i.cartId === cartId);
+  if (!item) return;
+  if (item.quantity <= 1) {
+    if (confirm(window.siteLang === 'ro' ? 'Elimini acest serviciu din coș?' : 'Remove this service from cart?')) {
+      _cartRemoveItem(cartId);
+    }
+    return;
+  }
+  item.quantity -= 1;
+  _cartSave();
+  _cartUpdateBadge();
+  _rerenderCartTotals(cartId);
+};
+
+function _rerenderCartTotals(cartId) {
+  const item = _cart.find(i => i.cartId === cartId);
+  const currency = item?.currency || '€';
+  // Update line total display
+  const lineEl = document.getElementById('line-' + cartId);
+  if (lineEl && item) lineEl.textContent = currency + (item.lineTotal * item.quantity);
+  const qtyEl = document.getElementById('qty-' + cartId);
+  if (qtyEl && item) qtyEl.textContent = item.quantity;
+  // Update summary totals
+  const subtotal  = _cartSubtotal();
+  const grandTotal = _cartGrandTotal();
+  const hasCoupon = _coupon && _coupon.pct > 0;
+  const couponDiscount = hasCoupon ? Math.round(subtotal * _coupon.pct / 100) : 0;
+  const subEl = document.getElementById('cart-subtotal');
+  const totEl = document.getElementById('cart-grand-total');
+  if (subEl) subEl.textContent = currency + subtotal;
+  if (totEl) totEl.textContent = currency + grandTotal;
+  // Update badge
+  _cartUpdateBadge();
+}
+
+window._cartClearAll = function() {
+  const isRo = window.siteLang === 'ro';
+  if (!confirm(isRo ? 'Golești tot coșul?' : 'Clear all items from cart?')) return;
+  _cart = [];
+  _coupon = null;
+  _cartSave();
+  _cartUpdateBadge();
+  _renderCartPage();
+};
+
+// ── Coupon UI ─────────────────────────────────────────────────────────────
+window._cartUiApplyCoupon = function() {
+  const input   = document.getElementById('cart-coupon-input');
+  const msgEl   = document.getElementById('cart-coupon-msg');
+  const isRo    = window.siteLang === 'ro';
+  const code    = input?.value?.trim();
+  if (!code) return;
+
+  if (_applyCoupon(code)) {
+    if (msgEl) { msgEl.textContent = ''; msgEl.className = 'cart-coupon-msg'; }
+    _renderCartPage(); // full re-render to show coupon row
+  } else {
+    if (msgEl) {
+      msgEl.textContent = isRo ? 'Cod invalid sau expirat.' : 'Invalid or expired code.';
+      msgEl.className   = 'cart-coupon-msg cart-coupon-msg-error';
+    }
+    if (input) { input.classList.add('cart-coupon-input-error'); setTimeout(() => input.classList.remove('cart-coupon-input-error'), 600); }
+  }
+};
+
+window._cartUiRemoveCoupon = function() {
+  _removeCoupon();
+  _renderCartPage();
+};
+
+// ── Checkout ──────────────────────────────────────────────────────────────
+window._cartCheckout = function() {
+  const isRo = window.siteLang === 'ro';
+  if (_cart.length === 0) return;
+  const lines = _cart.map(item => {
+    const extrasStr = item.extras.length
+      ? '\n  ' + item.extras.map(e => `${e.label}${e.isFree ? ' (Gratuit/Free)' : ` (+${e.currency}${e.price})`}`).join('\n  ')
+      : '';
+    return `${item.svcName} x${item.quantity}${extrasStr}\n  ${isRo ? 'Total linie' : 'Line total'}: ${item.currency}${item.lineTotal * item.quantity}`;
+  });
+  const subtotalStr = `${isRo ? 'Subtotal' : 'Subtotal'}: ${_cart[0]?.currency || '€'}${_cartSubtotal()}`;
+  const couponStr   = _coupon ? `\n${isRo ? 'Cod reducere' : 'Discount code'}: ${_coupon.code} (-${_coupon.pct}%)` : '';
+  const totalStr    = `Total: ${_cart[0]?.currency || '€'}${_cartGrandTotal()}`;
+  const body = [
+    isRo ? 'Bună ziua,' : 'Hello,',
+    '',
+    isRo ? 'Aș dori să solicit o ofertă pentru următoarele servicii:' : 'I would like to request a quote for the following services:',
+    '',
+    lines.join('\n\n'),
+    '',
+    subtotalStr + couponStr,
+    totalStr,
+    '',
+    isRo ? 'Vă mulțumesc,' : 'Thank you,',
+  ].join('\n');
+
+  const subject = isRo
+    ? `Cerere ofertă — ${_cart.map(i => i.svcName).join(', ')}`
+    : `Quote request — ${_cart.map(i => i.svcName).join(', ')}`;
+
+  window.location.href = `mailto:${_contactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+};
+
+// Show cart button if cart has items on load
+if (_cart.length > 0) {
+  const btn = document.getElementById('tb-cart-btn');
+  if (btn) btn.style.display = '';
+  _cartUpdateBadge();
+}

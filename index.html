@@ -119,6 +119,11 @@
     <div class="tb-social" id="tb-social">
       <!-- populated by loadSiteSettings() -->
     </div>
+    <!-- CART BUTTON -->
+    <button class="tb-cart-btn" id="tb-cart-btn" onclick="openCart()" title="Cart" style="display:none">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="13.5" r="1"/><circle cx="12" cy="13.5" r="1"/><path d="M1 2h2l2.4 7.5h6.2L13.5 5H4"/></svg>
+      <span class="tb-cart-label" id="tb-cart-label">Cart</span>
+    </button>
     <div class="tb-support">
       <a class="tb-support-btn" href="https://paypal.me/yourname" target="_blank" rel="noopener" title="Sustine pe PayPal" data-i18n-title="support-paypal">
         <!-- PayPal icon -->
@@ -526,6 +531,51 @@
         <div class="proj-license-panel" id="proj-license-panel"></div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- SERVICE POPUP (fullscreen slide-in, same pattern as project page) -->
+  <div class="proj-backdrop svc-popup-backdrop" id="svc-popup-backdrop" onclick="closeService(event)">
+    <div class="proj-page svc-popup-page" id="svc-popup-page">
+      <div class="proj-header">
+        <div class="proj-header-left">
+          <button class="proj-back" onclick="closeService()">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="9,2 4,7 9,12"/></svg>
+            <span data-i18n="nav-services">Servicii</span>
+          </button>
+          <div class="proj-breadcrumb">
+            <span class="proj-breadcrumb-sep">/</span>
+            <span id="svc-popup-crumb"></span>
+          </div>
+        </div>
+        <div class="proj-header-right" id="svc-popup-badge-wrap"></div>
+      </div>
+      <!-- Service card body injected here -->
+      <div class="svc-popup-body" id="svc-popup-body"></div>
+    </div>
+  </div>
+
+  <!-- CART PAGE (fullscreen slide-in, same pattern as service page) -->
+  <div class="proj-backdrop cart-backdrop" id="cart-backdrop" onclick="closeCart(event)">
+    <div class="proj-page cart-page" id="cart-page">
+      <div class="proj-header">
+        <div class="proj-header-left">
+          <button class="proj-back" onclick="closeCart()">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="9,2 4,7 9,12"/></svg>
+            <span id="cart-back-label">Services</span>
+          </button>
+          <div class="proj-breadcrumb">
+            <span class="proj-breadcrumb-sep">/</span>
+            <span id="cart-title-crumb">Cart</span>
+          </div>
+        </div>
+        <div class="proj-header-right">
+          <span class="cart-item-count-badge" id="cart-item-count-badge"></span>
+        </div>
+      </div>
+      <div class="cart-body" id="cart-body">
+        <!-- Rendered by JS -->
+      </div>
     </div>
   </div>
 
