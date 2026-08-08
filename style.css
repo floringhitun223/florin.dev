@@ -1,3 +1,36 @@
+/* ── DOWNLOAD COUNT BADGE ── */
+.mr-dl-cell {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-3);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.mr-dl-cell svg { opacity: .7; flex-shrink: 0; }
+
+.mgc-dl-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-3);
+  font-size: 11px;
+  margin-left: auto;
+}
+.mgc-dl-count svg { opacity: .7; flex-shrink: 0; }
+
+.proj-dl-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 13px;
+  margin-left: 12px;
+  vertical-align: middle;
+}
+.proj-dl-count svg { opacity: .8; flex-shrink: 0; }
+.proj-dl-count span { font-weight: 600; }
+
 /* ── CODE BLOCKS ── */
 .code-block {
   border: 1px solid var(--border-sub);
@@ -518,20 +551,33 @@ nav {
 .home-svc-card {
   display: flex;
   flex-direction: column;
-  padding: 14px 16px;
+  padding: 13px 16px;
   background: color-mix(in srgb, var(--s2) 90%, transparent);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   cursor: pointer;
-  transition: border-color .15s, background .15s, transform .15s, box-shadow .15s;
+  transition: border-color .15s, background .15s, box-shadow .15s;
+}
+/* When used inside svc-feed-grid, fix layout conflicts and stretch to grid row height */
+.home-svc-card.svc-feed-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 13px 16px;
+  height: 100%;
+  box-sizing: border-box;
+}
+.home-svc-card.svc-feed-item .hsc-row {
+  flex: 1;
+  align-items: flex-start;
 }
 .home-svc-card:hover {
-  border-color: color-mix(in srgb, var(--accent-h) 50%, transparent);
+  border-color: color-mix(in srgb, var(--accent-h) 45%, transparent);
   background: var(--s2);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0,0,0,.22);
+  box-shadow: 0 4px 16px rgba(0,0,0,.18);
 }
 /* Row layout inside card */
 .hsc-row {
@@ -688,6 +734,7 @@ nav {
 /* Responsive */
 @media (max-width: 860px) {
   .home-split { flex-direction: column; gap: 36px; padding: 40px 20px 36px; }
+  .home-left { max-width: 100%; width: 100%; }
   .home-right { flex: none; width: 100%; }
   .home-h1 { font-size: 38px; }
   .home-split-layout {
@@ -780,7 +827,7 @@ nav {
 }
 .mod-table-head {
   display: grid;
-  grid-template-columns: 2fr 90px 80px;
+  grid-template-columns: 2fr 90px 72px 80px;
   padding: 7px 16px;
   background: var(--s2);
   border-bottom: 1px solid var(--border-sub);
@@ -795,7 +842,7 @@ nav {
 
 .mod-row {
   display: grid;
-  grid-template-columns: 2fr 90px 80px;
+  grid-template-columns: 2fr 90px 72px 80px;
   padding: 0 16px;
   gap: 12px;
   align-items: center;
@@ -1435,10 +1482,10 @@ nav {
 
 /* Responsive */
 @media(max-width: 680px) {
-  .mod-table-head { grid-template-columns: 1fr 80px; }
-  .mod-table-head .mth-year { display: none; }
-  .mod-row { grid-template-columns: 1fr 80px; }
-  .mr-year-cell { display: none; }
+  .mod-table-head { grid-template-columns: 1fr 72px; }
+  .mod-table-head .mth-year, .mod-table-head .mth-files { display: none; }
+  .mod-row { grid-template-columns: 1fr 72px; }
+  .mr-year-cell, .mr-files-cell { display: none; }
 }
 @media(max-width: 480px) {
   .home-h1 { font-size: 30px; }
@@ -2925,10 +2972,10 @@ nav {
   width: 11px; height: 11px; flex-shrink: 0;
 }
 
-/* Grid of service cards — matches home-svc-grid vertical card style */
+/* Grid of service cards */
 .svc-feed-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 10px;
 }
 

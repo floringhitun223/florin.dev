@@ -480,12 +480,15 @@ function firestoreDocToMod(docId, data) {
   const shortDesc  = _langVal(data, 'short_desc') || '';
   const yearMatch  = shortDesc.match(/\d{4}/);
   const year       = yearMatch ? yearMatch[0] : '';
+  // Strip the year (and any surrounding separator like " · " or " - ") from dev text
+  // so it doesn't appear twice alongside the dedicated year cell/badge
+  const devText    = shortDesc.replace(/\s*[·\-–—]\s*\d{4}|\d{4}\s*[·\-–—]\s*/g, '').trim();
   const marks      = normalizeMarks(data.marks);
   const hasAiMark  = marks.some(m => AI_MARK_KEYS.has(m.key));
   const legacyAi   = !!data.ai_used;
 
   return {
-    id: docId, name: _langVal(data, 'Name') || data.Name || docId, dev: shortDesc, year,
+    id: docId, name: _langVal(data, 'Name') || data.Name || docId, dev: devText, year,
     authors, status, downloadUrl,
     description: _langVal(data, 'desc') || '', image: data.image || '', imageHero: data.imageHero || '', imageHero2: data.imageHero2 || '',
     marks,
@@ -498,6 +501,65 @@ function firestoreDocToMod(docId, data) {
     licenseKey:  data.licenseKey || '',
   };
 }
+
+// ── DOWNLOAD COUNT ────────────────────────────────────────────────────────
+const DENO_URL = 'https://vast-chimp-3549.florinnghitun.deno.net';
+const _dlCountCache = {};
+const _dlFetching = new Set();
+
+function _fmtDownloads(n) {
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+  return String(n || 0);
+}
+
+function _updateDlBadges(id, count) {
+  const fmt = _fmtDownloads(count);
+  document.querySelectorAll(`.mr-dl-cell[data-proj-id="${id}"] span`).forEach(el => el.textContent = fmt);
+  document.querySelectorAll(`.mgc-dl-count[data-proj-id="${id}"] span`).forEach(el => el.textContent = fmt);
+  const heroEl = document.getElementById('proj-dl-count');
+  if (heroEl && heroEl.dataset.projId === id) {
+    const sp = heroEl.querySelector('span');
+    if (sp) sp.textContent = fmt;
+  }
+}
+
+async function _fetchDownloadCount(id) {
+  if (_dlFetching.has(id)) return;
+  _dlFetching.add(id);
+  try {
+    const res = await fetch(`${DENO_URL}?id=${encodeURIComponent(id)}`);
+    if (!res.ok) return;
+    const { downloads } = await res.json();
+    _dlCountCache[id] = downloads;
+    _updateDlBadges(id, downloads);
+  } catch(e) {}
+}
+
+async function _trackDownload(id) {
+  try {
+    console.log('[dl] POST', id);
+    const res = await fetch(DENO_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileId: id }),
+    });
+    const text = await res.text();
+    console.log('[dl] POST response', res.status, text);
+    if (!res.ok) return;
+    const { downloads } = JSON.parse(text);
+    _dlCountCache[id] = downloads;
+    _updateDlBadges(id, downloads);
+  } catch(e) { console.error('[dl] POST error', e); }
+}
+window._trackDownload = _trackDownload;
+
+function _mockDownloads(id) {
+  if (_dlCountCache[id] !== undefined) return _fmtDownloads(_dlCountCache[id]);
+  _fetchDownloadCount(id);
+  return '0';
+}
+
+const _dlIconSvg = `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" style="width:11px;height:11px"><polyline points="6,1.5 6,8"/><polyline points="3,5.5 6,8.5 9,5.5"/><line x1="1.5" y1="10.5" x2="10.5" y2="10.5"/></svg>`;
 
 // ── COVER FALLBACK ────────────────────────────────────────────────────────
 function coverThumbFallback(mod) {
@@ -712,7 +774,8 @@ function _renderList(table, pageItems) {
         </div>
       </div>
       <div class="mr-files-cell"><strong>${verCount}</strong><span>${t('versiuni')}</span></div>
-      <div class="mr-year-cell">${year}
+      <div class="mr-dl-cell" data-proj-id="${entry.id}">${_dlIconSvg}<span>${_mockDownloads(entry.id)}</span></div>
+      <div class="mr-year-cell">
         <svg class="mr-chevron" style="display:inline-block;vertical-align:middle;margin-left:4px" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="5,3 9,7 5,11"/></svg>
       </div>`;
     table.appendChild(row);
@@ -796,7 +859,7 @@ function _renderGrid(table, pageItems) {
         ${marksHtml}
         <div class="mgc-footer">
           <span class="mgc-ver"><strong>${verCount}</strong> ${t('versiuni')}</span>
-          ${year ? `<span class="mgc-year">${year}</span>` : ''}
+          <span class="mgc-dl-count" data-proj-id="${entry.id}">${_dlIconSvg}<span>${_mockDownloads(entry.id)}</span></span>
         </div>
       </div>`;
     table.appendChild(card);
@@ -1460,6 +1523,16 @@ function _renderProjectPage(m) {
     }
   }
   _renderDesc(document.getElementById('proj-desc'), m.description);
+  // Download count badge on project hero
+  let _dlCountEl = document.getElementById('proj-dl-count');
+  if (!_dlCountEl) {
+    _dlCountEl = document.createElement('span');
+    _dlCountEl.id = 'proj-dl-count';
+    _dlCountEl.className = 'proj-dl-count';
+    dlBtn.parentNode.insertBefore(_dlCountEl, dlBtn.nextSibling);
+  }
+  _dlCountEl.innerHTML = `${_dlIconSvg}<span>${_mockDownloads(m.id)}</span> ${window.siteLang === 'ro' ? 'descărcări' : 'downloads'}`;
+
   const filesCountEl = document.getElementById('proj-files-count');
   if (filesCountEl) filesCountEl.textContent = m.versions.length > 0 ? m.versions.length : '';
   const timeline = document.getElementById('ver-timeline');
@@ -1485,7 +1558,7 @@ function _renderProjectPage(m) {
             <span class="ver-file-name">${v.file || t('fisierNedisponibil')}</span>
             ${v.commit ? `<span class="ver-commit">${v.commit}</span>` : ''}
             <a class="ver-dl-btn ${canDl ? '' : 'ver-dl-locked'}"
-               ${canDl ? `href="${vUrl}" target="_blank"` : 'onclick="return false"'}
+               ${canDl ? `href="${vUrl}" target="_blank" onclick="_trackDownload('${m.id}')"` : 'onclick="return false"'}
                title="${canDl ? 'Descarca' : 'Indisponibil'}">
               <svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6">
                 ${canDl
@@ -2083,7 +2156,7 @@ function _svcNormalize(raw) {
   const rawName = raw.name;
   const engName = (rawName && typeof rawName === 'object') ? (rawName.en || rawName.ro || '') : (rawName || '');
   return {
-    id:       _slugify(engName) || _slugify(name) || ('svc-' + Math.random().toString(36).slice(2,7)),
+    id:       _svcSlugify(engName) || _svcSlugify(name) || ('svc-' + Math.random().toString(36).slice(2,7)),
     name,
     creator:  raw.creator  || '',
     desc:     _langVal(raw, 'desc') || _langVal(raw, 'tagline') || raw.desc || raw.tagline || '',
@@ -2289,7 +2362,7 @@ function _svcCardHtmlCore(svc, idPrefix, inAccordion) {
           <span>Total</span>
           <span class="svc-pkg-total-val" id="total-${idPrefix}">${currency}${isDiscount && pct > 0 ? discountedBase : (svc.price || '')}</span>
         </div>
-        <button class="btn btn-cart svc-pkg-cart-btn" id="cart-btn-${idPrefix}" onclick="_svcAddToCart('${idPrefix}', '${svc.id || _slugify(svc.name || '')}')">
+        <button class="btn btn-cart svc-pkg-cart-btn" id="cart-btn-${idPrefix}" onclick="_svcAddToCart('${idPrefix}', '${svc.id || _svcSlugify(svc.name || '')}')">
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="5.5" cy="12" r=".9"/><circle cx="10.5" cy="12" r=".9"/><path d="M1 2h1.7l2 6.5h5.5l1.5-4.5H3.5"/></svg>
           ${isRo ? 'Adaugă în coș' : 'Add to cart'}
         </button>
@@ -2755,7 +2828,7 @@ function _svcFeedCardHtml(svc, idPrefix) {
   const basePrice = parseFloat(svc.price) || 0;
   const desc      = svc.desc || '';
   const badgeCls  = _svcBadgeClass(svc.badge);
-  const svcId     = svc.id || _slugify(svc.name);
+  const svcId     = svc.id || _svcSlugify(svc.name);
   const isRo      = window.siteLang === 'ro';
   const status    = _svcEffectiveStatus(svc); // expired timelimited → 'expired' (treated as unavailable)
 
@@ -2959,6 +3032,11 @@ document.addEventListener('keydown', e => {
 
 function _slugify(s) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+// Service-specific slugify: uses underscores so service IDs read as eng_lowercase_with_underscores
+function _svcSlugify(s) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 }
 
 let _contactEmail = 'contact@florin.dev';
