@@ -505,7 +505,7 @@ function firestoreDocToMod(docId, data) {
 // ── DOWNLOAD COUNT ────────────────────────────────────────────────────────
 const DENO_URL = 'https://vast-chimp-3549.florinnghitun.deno.net';
 const _dlCountCache = {};
-const _dlFetching = new Set();
+let _dlLoaded = false;
 
 function _fmtDownloads(n) {
   if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
@@ -523,40 +523,37 @@ function _updateDlBadges(id, count) {
   }
 }
 
-async function _fetchDownloadCount(id) {
-  if (_dlFetching.has(id)) return;
-  _dlFetching.add(id);
+// One GET fetches all counts at once
+async function _fetchAllDownloads() {
+  if (_dlLoaded) return;
+  _dlLoaded = true;
   try {
-    const res = await fetch(`${DENO_URL}?id=${encodeURIComponent(id)}`);
+    const res = await fetch(DENO_URL);
     if (!res.ok) return;
-    const { downloads } = await res.json();
-    _dlCountCache[id] = downloads;
-    _updateDlBadges(id, downloads);
+    const counts = await res.json();
+    Object.entries(counts).forEach(([id, n]) => {
+      _dlCountCache[id] = n;
+      _updateDlBadges(id, n);
+    });
   } catch(e) {}
 }
+_fetchAllDownloads();
 
 async function _trackDownload(id) {
   try {
-    console.log('[dl] POST', id);
-    const res = await fetch(DENO_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fileId: id }),
-    });
-    const text = await res.text();
-    console.log('[dl] POST response', res.status, text);
-    if (!res.ok) return;
-    const { downloads } = JSON.parse(text);
-    _dlCountCache[id] = downloads;
-    _updateDlBadges(id, downloads);
-  } catch(e) { console.error('[dl] POST error', e); }
+    const sent = navigator.sendBeacon(DENO_URL, new Blob([JSON.stringify({ fileId: id })], { type: 'application/json' }));
+    if (!sent) throw new Error('sendBeacon failed');
+  } catch(e) {
+    fetch(DENO_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileId: id }), keepalive: true }).catch(() => {});
+  }
+  // Optimistic local update
+  _dlCountCache[id] = (_dlCountCache[id] ?? 0) + 1;
+  _updateDlBadges(id, _dlCountCache[id]);
 }
 window._trackDownload = _trackDownload;
 
 function _mockDownloads(id) {
-  if (_dlCountCache[id] !== undefined) return _fmtDownloads(_dlCountCache[id]);
-  _fetchDownloadCount(id);
-  return '0';
+  return _fmtDownloads(_dlCountCache[id]);
 }
 
 const _dlIconSvg = `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" style="width:11px;height:11px"><polyline points="6,1.5 6,8"/><polyline points="3,5.5 6,8.5 9,5.5"/><line x1="1.5" y1="10.5" x2="10.5" y2="10.5"/></svg>`;
