@@ -107,6 +107,7 @@ const HASH_PAGE_MAP = {
   '':                 null,          // # alone → home
   'proiecte':         'proiecte',
   'servicii':         'servicii',
+  'tools':            'tools',
   'despre':           'despre',
   'confidentialitate':'confidentialitate',
   'termeni':          'termeni',
@@ -523,7 +524,7 @@ function _updateDlBadges(id, count) {
   }
 }
 
-// One GET fetches all counts at once
+// One GET fetches all counts at once (no ?id → server returns full map)
 async function _fetchAllDownloads() {
   if (_dlLoaded) return;
   _dlLoaded = true;
@@ -531,24 +532,30 @@ async function _fetchAllDownloads() {
     const res = await fetch(DENO_URL);
     if (!res.ok) return;
     const counts = await res.json();
-    Object.entries(counts).forEach(([id, n]) => {
-      _dlCountCache[id] = n;
-      _updateDlBadges(id, n);
-    });
+    // Server returns either { id: n, ... } (all-counts map) or { downloads: n } (single, ignore)
+    if (typeof counts === 'object' && !('downloads' in counts)) {
+      Object.entries(counts).forEach(([id, n]) => {
+        _dlCountCache[id] = n;
+        _updateDlBadges(id, n);
+      });
+    }
   } catch(e) {}
 }
 _fetchAllDownloads();
 
 async function _trackDownload(id) {
-  try {
-    const sent = navigator.sendBeacon(DENO_URL, new Blob([JSON.stringify({ fileId: id })], { type: 'application/json' }));
-    if (!sent) throw new Error('sendBeacon failed');
-  } catch(e) {
-    fetch(DENO_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileId: id }), keepalive: true }).catch(() => {});
-  }
-  // Optimistic local update
+  // Optimistic local update immediately
   _dlCountCache[id] = (_dlCountCache[id] ?? 0) + 1;
   _updateDlBadges(id, _dlCountCache[id]);
+  // sendBeacon with application/json fails CORS silently — use fetch + keepalive instead
+  try {
+    await fetch(DENO_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileId: id }),
+      keepalive: true,
+    });
+  } catch(e) {}
 }
 window._trackDownload = _trackDownload;
 
@@ -1487,7 +1494,7 @@ function _renderProjectPage(m) {
   const dlBtn = document.getElementById('proj-download-btn');
   if (m.downloadUrl) {
     dlBtn.style.display = 'inline-flex';
-    dlBtn.onclick = () => window.open(m.downloadUrl, '_blank');
+    dlBtn.onclick = () => { _trackDownload(m.id); window.open(m.downloadUrl, '_blank'); };
     const isPlayStore = m.downloadUrl.includes('play.google.com');
     if (isPlayStore) {
       dlBtn.classList.add('btn-play-store');
@@ -1555,7 +1562,7 @@ function _renderProjectPage(m) {
             <span class="ver-file-name">${v.file || t('fisierNedisponibil')}</span>
             ${v.commit ? `<span class="ver-commit">${v.commit}</span>` : ''}
             <a class="ver-dl-btn ${canDl ? '' : 'ver-dl-locked'}"
-               ${canDl ? `href="${vUrl}" target="_blank" onclick="_trackDownload('${m.id}')"` : 'onclick="return false"'}
+               ${canDl ? `href="${vUrl}" target="_blank" onclick="event.preventDefault();_trackDownload('${m.id}').then(()=>window.open('${vUrl}','_blank'))"` : 'onclick="return false"'}
                title="${canDl ? 'Descarca' : 'Indisponibil'}">
               <svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6">
                 ${canDl
@@ -1601,6 +1608,7 @@ const QUERY_PAGE_MAP = {
   '':                 'home',
   'proiecte':         'products',
   'servicii':         'servicii',
+  'tools':            'tools',
   'despre':           'about',
   'confidentialitate':'privacy',
   'termeni':          'terms',
@@ -1608,7 +1616,7 @@ const QUERY_PAGE_MAP = {
 };
 const NAV_MAP = {
   home: 'ni-home', products: 'ni-products',
-  servicii: 'ni-servicii', about: 'ni-about',
+  servicii: 'ni-servicii', tools: 'ni-tools', about: 'ni-about',
 };
 function _projectsTitle(page) {
   const base = 'Proiecte · FlorinDev';
@@ -1619,6 +1627,7 @@ const PAGE_TITLE_MAP = {
   home:      'FlorinDev',
   products:  'Proiecte · FlorinDev',
   servicii:  'Servicii · FlorinDev',
+  tools:     'Tools · FlorinDev',
   about:     'Despre · FlorinDev',
   privacy:   'Confidențialitate · FlorinDev',
   terms:     'Termeni · FlorinDev',

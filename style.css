@@ -10,6 +10,7 @@
 .mr-dl-cell svg { opacity: .7; flex-shrink: 0; }
 
 .mgc-dl-count {
+  display: none !important;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -20,7 +21,7 @@
 .mgc-dl-count svg { opacity: .7; flex-shrink: 0; }
 
 .proj-dl-count {
-  display: inline-flex;
+  display: none !important;
   align-items: center;
   gap: 6px;
   color: var(--text-2);
@@ -3436,4 +3437,10 @@ nav {
 .svc-discount-info-btn span:first-of-type,
 .svc-discount-info-btn{
  color:var(--amber);
+}
+#ni-servicii{
+  display: none;
+}
+#ni-tools{
+  display: none;
 }
