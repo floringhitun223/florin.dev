@@ -11,7 +11,7 @@ Thumbs.db
 node_modules/
 
 # obfuscation
-
+originals/
 obfuscate.js
 publish.js
 package-lock.json
