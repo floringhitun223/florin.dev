@@ -9,3 +9,10 @@ Thumbs.db
 
 # Node (daca folosesti)
 node_modules/
+
+# obfuscation
+
+obfuscate.js
+publish.js
+package-lock.json
+package.json
