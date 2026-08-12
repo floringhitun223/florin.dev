@@ -1,8 +1,0 @@
-{
-  "scripts": {
-    "publish": "node publish.js"
-  },
-  "devDependencies": {
-    "javascript-obfuscator": "^5.5.0"
-  }
-}
