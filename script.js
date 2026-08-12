@@ -1323,6 +1323,11 @@ function switchProjTab(tab) {
 window.switchProjTab = switchProjTab;
 
 // ── GITHUB REPO FILE LISTING ──────────────────────────────────────────────
+// Module-scoped audio state so closeProject() can reach it
+let _ghAudio   = null;
+let _ghPlayBtn = null;
+let _ghBar     = null;
+
 async function _loadCodePanel(m) {
   const el = document.getElementById('proj-code-panel');
   if (!el || !m.codeRepo) {
@@ -1355,21 +1360,69 @@ async function _loadCodePanel(m) {
     const folderIcon = `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1 3h5l1.5 1.5H13V11H1z"/></svg>`;
     const fileIcon   = `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 1h7l3 3v9H2z"/><path d="M9 1v3h3"/></svg>`;
     const dlIcon     = `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="6,2 6,8"/><polyline points="3,6 6,9 9,6"/><line x1="2" y1="10.5" x2="10" y2="10.5"/></svg>`;
+    const playIcon   = `<svg viewBox="0 0 12 12" fill="currentColor"><polygon points="3,1 11,6 3,11"/></svg>`;
+    const pauseIcon  = `<svg viewBox="0 0 12 12" fill="currentColor"><rect x="2" y="1" width="3" height="10" rx="1"/><rect x="7" y="1" width="3" height="10" rx="1"/></svg>`;
+
+    const AUDIO_EXTS = new Set(['mp3','ogg','wav','flac','aac','m4a','opus','weba','webm']);
+    const _isAudio = name => AUDIO_EXTS.has(name.split('.').pop().toLowerCase());
+
+    // Readable text extensions → language hint for hljs (empty string = plain text)
+    const TEXT_EXTS = {
+      // code
+      js:'javascript', mjs:'javascript', cjs:'javascript', ts:'typescript',
+      jsx:'javascript', tsx:'typescript', html:'html', htm:'html', css:'css',
+      scss:'scss', sass:'scss', less:'less', json:'json', jsonc:'json',
+      xml:'xml', svg:'xml', yaml:'yaml', yml:'yaml', toml:'toml', ini:'ini',
+      py:'python', rb:'ruby', java:'java', kt:'kotlin', kts:'kotlin',
+      c:'c', h:'c', cpp:'cpp', hpp:'cpp', cs:'csharp', go:'go',
+      rs:'rust', swift:'swift', php:'php', sh:'bash', bash:'bash',
+      zsh:'bash', fish:'bash', bat:'dos', ps1:'powershell', lua:'lua',
+      r:'r', dart:'dart', scala:'scala', ex:'elixir', exs:'elixir',
+      erl:'erlang', hs:'haskell', sql:'sql', graphql:'graphql', gql:'graphql',
+      dockerfile:'dockerfile', makefile:'makefile', mk:'makefile',
+      gradle:'groovy', groovy:'groovy', tf:'hcl', hcl:'hcl',
+      // markup / config (plain text render)
+      md:'', markdown:'', txt:'', text:'', rst:'', log:'', csv:'',
+      tsv:'', env:'', gitignore:'', gitattributes:'', editorconfig:'',
+      prettierrc:'json', eslintrc:'json', babelrc:'json',
+    };
+    const _ext  = name => name.split('.').pop().toLowerCase();
+    const _isText = name => {
+      const e = _ext(name);
+      return e in TEXT_EXTS || name.toLowerCase() === 'dockerfile' || name.toLowerCase() === 'makefile';
+    };
+    const _isMd = name => ['md','markdown'].includes(_ext(name));
 
     // Try main branch first, then master
     const codeZipUrl = `https://github.com/${owner}/${repo}/archive/refs/heads/main.zip`;
 
+    const eyeIcon = `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6C1 6 3 2.5 6 2.5S11 6 11 6 9 9.5 6 9.5 1 6 1 6z"/><circle cx="6" cy="6" r="1.6" fill="currentColor" stroke="none"/></svg>`;
+    const rawIcon = `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="1,4 4,6 1,8"/><line x1="6" y1="9" x2="11" y2="9"/></svg>`;
+    const backIcon = `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="7,2 3,6 7,10"/><line x1="3" y1="6" x2="11" y2="6"/></svg>`;
+
     const fileCount = files.length;
-    const rows = files.map(f => {
-      const icon  = f.type === 'dir' ? folderIcon : fileIcon;
-      const dlBtn = f.type !== 'dir' && f.download_url
+    const rows = files.map((f, i) => {
+      const icon      = f.type === 'dir' ? folderIcon : fileIcon;
+      const dlBtn     = f.type !== 'dir' && f.download_url
         ? `<a class="gh-file-dl" href="${f.download_url}" download rel="noopener" title="${t('descarca')}">${dlIcon}</a>`
         : '';
-      const size  = f.type !== 'dir' && f.size ? `<span class="gh-file-size">${_fmtSize(f.size)}</span>` : '';
-      return `<div class="gh-file-row">
+      const size      = f.type !== 'dir' && f.size ? `<span class="gh-file-size">${_fmtSize(f.size)}</span>` : '';
+      const audioBtn  = f.type !== 'dir' && _isAudio(f.name) && f.download_url
+        ? `<button class="gh-file-play" data-url="${f.download_url}" data-idx="${i}" title="Play / Pause">${playIcon}</button>`
+        : '';
+      const viewBtn   = f.type !== 'dir' && f.download_url && !_isAudio(f.name)
+        ? `<button class="gh-file-view" data-url="${f.download_url}" data-name="${f.name}" title="View file">${eyeIcon}</button>`
+        : '';
+      const isClickable = f.type !== 'dir' && f.download_url;
+      const rowData = isClickable
+        ? `data-url="${f.download_url}" data-name="${f.name}" ${_isAudio(f.name) ? 'data-audio="1"' : ''}`
+        : '';
+      return `<div class="gh-file-row${isClickable ? ' gh-file-row--clickable' : ''}" data-idx="${i}" ${rowData}>
         <span class="gh-file-icon ${f.type === 'dir' ? 'gh-dir' : ''}">${icon}</span>
         <span class="gh-file-name">${f.name}</span>
         ${size}
+        ${audioBtn}
+        ${viewBtn}
         ${dlBtn}
       </div>`;
     }).join('');
@@ -1384,6 +1437,170 @@ async function _loadCodePanel(m) {
         </div>
         <div class="gh-files-list">${rows}</div>
       </div>`;
+
+    const listWrap   = el.querySelector('.gh-files-wrap');
+
+    // ── File viewer modal ──────────────────────────────────────────────────
+    function _showViewer(url, name) {
+      const dlIcon2 = `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="6,2 6,8"/><polyline points="3,6 6,9 9,6"/><line x1="2" y1="10.5" x2="10" y2="10.5"/></svg>`;
+      const closeIcon = `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg>`;
+
+      const overlay = document.createElement('div');
+      overlay.className = 'gh-modal-overlay';
+      overlay.innerHTML = `
+        <div class="gh-modal">
+          <div class="gh-modal-header">
+            <span class="gh-viewer-name">${name}</span>
+            <div class="gh-modal-actions">
+              <a class="gh-modal-dl" href="${url}" download rel="noopener" title="Download">${dlIcon2}</a>
+              <a class="gh-viewer-raw" href="${url}" target="_blank" rel="noopener">${rawIcon} Raw</a>
+              <button class="gh-modal-close" title="Close">${closeIcon}</button>
+            </div>
+          </div>
+          <div class="gh-viewer-body"><div class="proj-tab-loading">${t('code-loading')}</div></div>
+        </div>`;
+
+      if (_ghAudio && !_ghAudio.paused) {
+        _ghAudio.pause();
+        if (_ghPlayBtn) _ghPlayBtn.innerHTML = _ghPlayIco;
+      }
+
+      document.body.appendChild(overlay);
+
+      const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+      const onKey = e => { if (e.key === 'Escape') close(); };
+      overlay.querySelector('.gh-modal-close').addEventListener('click', close);
+      overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+      document.addEventListener('keydown', onKey);
+
+      const body = overlay.querySelector('.gh-viewer-body');
+
+      if (_isMd(name)) {
+        fetch(url).then(r => r.text()).then(text => {
+          body.innerHTML = `<div class="gh-viewer-md md-prose">${_markedParse(text)}</div>`;
+        }).catch(() => { body.innerHTML = `<div class="proj-tab-empty">${t('code-error')}</div>`; });
+        return;
+      }
+
+      if (_isText(name)) {
+        fetch(url).then(r => r.text()).then(text => {
+          const lang = TEXT_EXTS[_ext(name)] || '';
+          let highlighted;
+          if (lang && window.hljs && window.hljs.getLanguage(lang)) {
+            highlighted = window.hljs.highlight(text, { language: lang, ignoreIllegals: true }).value;
+          } else if (window.hljs) {
+            highlighted = window.hljs.highlightAuto(text).value;
+          } else {
+            highlighted = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          }
+          const id = 'gh-view-' + Date.now();
+          _codeStore[id] = text;
+          const copyIcon = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="9" height="11" rx="1.5"/><path d="M3 4.5A1.5 1.5 0 0 0 2 6v7.5A1.5 1.5 0 0 0 3.5 15H10"/></svg>`;
+          body.innerHTML = `<div class="code-block gh-viewer-code">
+            <div class="cb-header">
+              ${lang ? `<span class="cb-lang">${lang}</span>` : ''}
+              <button class="cb-copy" id="${id}-copy" onclick="_codeBlockCopy('${id}')" title="Copy">${copyIcon}</button>
+            </div>
+            <pre class="cb-pre"><code class="hljs">${highlighted}</code></pre>
+          </div>`;
+        }).catch(() => { body.innerHTML = `<div class="proj-tab-empty">${t('code-error')}</div>`; });
+        return;
+      }
+
+      // Unknown format
+      body.innerHTML = `<div class="gh-viewer-unknown">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+        <p>${window.siteLang === 'ro' ? 'Fișier binar sau format necunoscut' : 'Binary or unknown file format'}</p>
+        <a class="gh-viewer-raw-btn" href="${url}" target="_blank" rel="noopener">${rawIcon} View Raw</a>
+      </div>`;
+    }
+
+    // ── Audio play/pause handling ──────────────────────────────────────────
+    const _ghPlayIco  = playIcon;
+    const _ghPauseIco = pauseIcon;
+
+    el.addEventListener('click', e => {
+      // Ignore clicks on action buttons — they handle themselves
+      if (e.target.closest('.gh-file-dl') || e.target.closest('.gh-file-view') || e.target.closest('.gh-file-play')) {
+        // view button still needs to trigger viewer
+        const viewBtn = e.target.closest('.gh-file-view');
+        if (viewBtn) {
+          _showViewer(viewBtn.dataset.url, viewBtn.dataset.name);
+        }
+        // play button falls through to section below
+        if (!e.target.closest('.gh-file-play')) return;
+      } else {
+        // Click on row body (name / icon / size area)
+        const row = e.target.closest('.gh-file-row--clickable');
+        if (row && !e.target.closest('.gh-file-play') && !e.target.closest('.gh-file-view') && !e.target.closest('.gh-file-dl')) {
+          if (row.dataset.audio) {
+            // simulate play button click
+            const playBtn = row.querySelector('.gh-file-play');
+            if (playBtn) playBtn.click();
+          } else {
+            _showViewer(row.dataset.url, row.dataset.name);
+          }
+          return;
+        }
+      }
+
+      // Play button
+      const btn = e.target.closest('.gh-file-play');
+      if (!btn) return;
+
+      const url = btn.dataset.url;
+
+      if (_ghAudio && _ghAudio._ghUrl === url) {
+        if (_ghAudio.paused) {
+          _ghAudio.play();
+          btn.innerHTML = _ghPauseIco;
+        } else {
+          _ghAudio.pause();
+          btn.innerHTML = _ghPlayIco;
+        }
+        return;
+      }
+
+      if (_ghAudio) {
+        _ghAudio.pause();
+        if (_ghPlayBtn) _ghPlayBtn.innerHTML = _ghPlayIco;
+        if (_ghBar) { _ghBar.remove(); _ghBar = null; }
+      }
+
+      _ghAudio = new Audio(url);
+      _ghAudio._ghUrl = url;
+      _ghPlayBtn = btn;
+      btn.innerHTML = _ghPauseIco;
+
+      const row = btn.closest('.gh-file-row');
+      const bar = document.createElement('div');
+      bar.className = 'gh-audio-bar';
+      bar.innerHTML = `<div class="gh-audio-progress"><div class="gh-audio-fill"></div></div><span class="gh-audio-time">0:00</span>`;
+      row.insertAdjacentElement('afterend', bar);
+      _ghBar = bar;
+
+      const fill   = bar.querySelector('.gh-audio-fill');
+      const timeEl = bar.querySelector('.gh-audio-time');
+      const _fmt   = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+
+      _ghAudio.addEventListener('timeupdate', () => {
+        if (!_ghAudio.duration) return;
+        fill.style.width = (_ghAudio.currentTime / _ghAudio.duration * 100) + '%';
+        timeEl.textContent = _fmt(_ghAudio.currentTime) + ' / ' + _fmt(_ghAudio.duration);
+      });
+      _ghAudio.addEventListener('ended', () => {
+        btn.innerHTML = _ghPlayIco;
+        fill.style.width = '0%';
+      });
+      bar.querySelector('.gh-audio-progress').addEventListener('click', ev => {
+        if (!_ghAudio.duration) return;
+        const rect = ev.currentTarget.getBoundingClientRect();
+        _ghAudio.currentTime = ((ev.clientX - rect.left) / rect.width) * _ghAudio.duration;
+      });
+
+      _ghAudio.play().catch(() => { btn.innerHTML = _ghPlayIco; });
+    });
+
   } catch(e) {
     el.innerHTML = `<div class="proj-tab-empty">${t('code-error')}</div>`;
   }
@@ -1582,6 +1799,9 @@ function _renderProjectPage(m) {
 }
 
 function closeProject() {
+  if (_ghAudio) { _ghAudio.pause(); _ghAudio = null; }
+  if (_ghPlayBtn) { _ghPlayBtn = null; }
+  if (_ghBar) { _ghBar.remove(); _ghBar = null; }
   const url = new URL(window.location.href);
   url.searchParams.set('page', 'proiecte');
   url.searchParams.delete('id');
@@ -1762,6 +1982,9 @@ function _activatePage(pageId) {
 }
 
 function _closeProjectSilent() {
+  if (_ghAudio) { _ghAudio.pause(); _ghAudio = null; }
+  if (_ghPlayBtn) { _ghPlayBtn = null; }
+  if (_ghBar) { _ghBar.remove(); _ghBar = null; }
   document.getElementById('proj-page').classList.remove('open');
   document.getElementById('proj-backdrop').classList.remove('open');
   document.body.style.overflow = '';

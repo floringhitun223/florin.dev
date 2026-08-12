@@ -2852,6 +2852,8 @@ nav {
   color: var(--text-1);
 }
 .gh-file-row:last-child { border-bottom: none; }
+.gh-file-row--clickable { cursor: pointer; }
+.gh-file-row--clickable:hover { background: var(--s2); }
 .gh-file-icon { display: flex; flex-shrink: 0; width: 14px; height: 14px; color: var(--text-3); }
 .gh-file-icon.gh-dir { color: #6bade6; }
 .gh-file-icon svg { width: 14px; height: 14px; }
@@ -2872,6 +2874,179 @@ nav {
 }
 .gh-file-dl:hover { background: var(--s3); color: var(--text-1); }
 .gh-file-dl svg { width: 13px; height: 13px; }
+.gh-file-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-3);
+  transition: background .12s, color .12s;
+  flex-shrink: 0;
+  padding: 0;
+}
+.gh-file-play:hover { background: var(--s3); color: var(--accent, #6bade6); }
+.gh-file-play svg { width: 12px; height: 12px; }
+.gh-audio-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px 6px 36px;
+  background: var(--s2, var(--s1));
+  border-bottom: 1px solid var(--border-sub);
+}
+.gh-audio-progress {
+  flex: 1;
+  height: 4px;
+  background: var(--border-sub);
+  border-radius: 2px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.gh-audio-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent, #6bade6);
+  border-radius: 2px;
+  transition: width .1s linear;
+}
+.gh-audio-time {
+  font-size: 11px;
+  color: var(--text-3);
+  font-family: 'JetBrains Mono', monospace;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+/* ── File viewer modal ──────────────────────────────────────────────────── */
+.gh-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  backdrop-filter: blur(4px);
+}
+.gh-modal {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 860px;
+  max-height: 88vh;
+  background: var(--s1);
+  border: 1px solid var(--border-sub);
+  border-radius: var(--r);
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0,0,0,.6);
+}
+.gh-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-sub);
+  flex-shrink: 0;
+}
+.gh-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.gh-modal-dl, .gh-modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: transparent;
+  border: none;
+  color: var(--text-3);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background .12s, color .12s;
+  padding: 0;
+}
+.gh-modal-dl:hover, .gh-modal-close:hover { background: var(--s3); color: var(--text-1); }
+.gh-modal-dl svg, .gh-modal-close svg { width: 13px; height: 13px; }
+.gh-viewer-name {
+  flex: 1;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.gh-viewer-raw {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-3);
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  transition: background .12s, color .12s;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.gh-viewer-raw:hover { background: var(--s3); color: var(--text-1); }
+.gh-viewer-raw svg { width: 12px; height: 12px; }
+.gh-viewer-body { flex: 1; overflow: auto; }
+.gh-viewer-md { padding: 20px 24px; font-size: 13.5px; line-height: 1.7; }
+.gh-viewer-code { margin: 0; border-radius: 0; border: none; }
+.gh-viewer-unknown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 20px;
+  color: var(--text-3);
+  text-align: center;
+}
+.gh-viewer-unknown p { margin: 0; font-size: 13px; }
+.gh-viewer-raw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: var(--r-sm);
+  background: var(--s3);
+  color: var(--text-2);
+  text-decoration: none;
+  font-size: 12px;
+  transition: background .12s, color .12s;
+}
+.gh-viewer-raw-btn:hover { background: var(--s4); color: var(--text-1); }
+.gh-viewer-raw-btn svg { width: 12px; height: 12px; }
+.gh-file-view {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-3);
+  transition: background .12s, color .12s;
+  flex-shrink: 0;
+  padding: 0;
+}
+.gh-file-view:hover { background: var(--s3); color: var(--text-1); }
+.gh-file-view svg { width: 12px; height: 12px; }
 
 /* ── LICENSE PANEL ───────────────────────────────────────────────────────── */
 .license-wrap {
