@@ -1,39 +1,129 @@
-This XML file does not appear to have any style information associated with it. The document tree is shown below.
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-<url>
-<loc>https://florindev.ro/</loc>
-<priority>1.0</priority>
-</url>
-<url>
-<loc>https://florindev.ro/?page=proiecte</loc>
-<priority>0.9</priority>
-</url>
-<url>
-<loc>https://florindev.ro/?page=servicii</loc>
-<priority>0.7</priority>
-</url>
-<url>
-<loc>https://florindev.ro/?page=despre</loc>
-<priority>0.6</priority>
-</url>
-<url>
-<loc>https://florindev.ro/?page=proiecte&id=gtavc-dublat</loc>
-<priority>0.8</priority>
-</url>
-<url>
-<loc>https://florindev.ro/?page=proiecte&id=gta3-dublat</loc>
-<priority>0.8</priority>
-</url>
-<url>
-<loc>https://florindev.ro/?page=proiecte&id=gtav-schoolv</loc>
-<priority>0.8</priority>
-</url>
-<url>
-<loc>https://florindev.ro/?page=proiecte&id=cordova-plugin-native-browser</loc>
-<priority>0.8</priority>
-</url>
-<url>
-<loc>https://florindev.ro/?page=proiecte&id=cordova-plugin-notification-listener</loc>
-<priority>0.8</priority>
-</url>
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://florindev.ro/?lang=ro</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?lang=eng"/>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://florindev.ro/?lang=eng</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?lang=eng"/>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://florindev.ro/?page=proiecte&amp;lang=ro</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?page=proiecte&amp;lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?page=proiecte&amp;lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?page=proiecte&amp;lang=eng"/>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://florindev.ro/?page=proiecte&amp;lang=eng</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?page=proiecte&amp;lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?page=proiecte&amp;lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?page=proiecte&amp;lang=eng"/>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://florindev.ro/?page=servicii&amp;lang=ro</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?page=servicii&amp;lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?page=servicii&amp;lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?page=servicii&amp;lang=eng"/>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://florindev.ro/?page=servicii&amp;lang=eng</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?page=servicii&amp;lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?page=servicii&amp;lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?page=servicii&amp;lang=eng"/>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://florindev.ro/?page=despre&amp;lang=ro</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?page=despre&amp;lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?page=despre&amp;lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?page=despre&amp;lang=eng"/>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://florindev.ro/?page=despre&amp;lang=eng</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?page=despre&amp;lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?page=despre&amp;lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?page=despre&amp;lang=eng"/>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://florindev.ro/?page=proiecte&amp;id=gtavc-dublat&amp;lang=ro</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?page=proiecte&amp;id=gtavc-dublat&amp;lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?page=proiecte&amp;id=gtavc-dublat&amp;lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?page=proiecte&amp;id=gtavc-dublat&amp;lang=eng"/>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://florindev.ro/?page=proiecte&amp;id=gtavc-dublat&amp;lang=eng</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?page=proiecte&amp;id=gtavc-dublat&amp;lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?page=proiecte&amp;id=gtavc-dublat&amp;lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?page=proiecte&amp;id=gtavc-dublat&amp;lang=eng"/>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://florindev.ro/?page=proiecte&amp;id=gta3-dublat&amp;lang=ro</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?page=proiecte&amp;id=gta3-dublat&amp;lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?page=proiecte&amp;id=gta3-dublat&amp;lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?page=proiecte&amp;id=gta3-dublat&amp;lang=eng"/>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://florindev.ro/?page=proiecte&amp;id=gta3-dublat&amp;lang=eng</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?page=proiecte&amp;id=gta3-dublat&amp;lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?page=proiecte&amp;id=gta3-dublat&amp;lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?page=proiecte&amp;id=gta3-dublat&amp;lang=eng"/>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://florindev.ro/?page=proiecte&amp;id=gtav-schoolv&amp;lang=ro</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?page=proiecte&amp;id=gtav-schoolv&amp;lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?page=proiecte&amp;id=gtav-schoolv&amp;lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?page=proiecte&amp;id=gtav-schoolv&amp;lang=eng"/>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://florindev.ro/?page=proiecte&amp;id=gtav-schoolv&amp;lang=eng</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?page=proiecte&amp;id=gtav-schoolv&amp;lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?page=proiecte&amp;id=gtav-schoolv&amp;lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?page=proiecte&amp;id=gtav-schoolv&amp;lang=eng"/>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://florindev.ro/?page=proiecte&amp;id=cordova-plugin-native-browser&amp;lang=ro</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?page=proiecte&amp;id=cordova-plugin-native-browser&amp;lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?page=proiecte&amp;id=cordova-plugin-native-browser&amp;lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?page=proiecte&amp;id=cordova-plugin-native-browser&amp;lang=eng"/>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://florindev.ro/?page=proiecte&amp;id=cordova-plugin-native-browser&amp;lang=eng</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?page=proiecte&amp;id=cordova-plugin-native-browser&amp;lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?page=proiecte&amp;id=cordova-plugin-native-browser&amp;lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?page=proiecte&amp;id=cordova-plugin-native-browser&amp;lang=eng"/>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://florindev.ro/?page=proiecte&amp;id=cordova-plugin-notification-listener&amp;lang=ro</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?page=proiecte&amp;id=cordova-plugin-notification-listener&amp;lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?page=proiecte&amp;id=cordova-plugin-notification-listener&amp;lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?page=proiecte&amp;id=cordova-plugin-notification-listener&amp;lang=eng"/>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://florindev.ro/?page=proiecte&amp;id=cordova-plugin-notification-listener&amp;lang=eng</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://florindev.ro/?page=proiecte&amp;id=cordova-plugin-notification-listener&amp;lang=ro"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://florindev.ro/?page=proiecte&amp;id=cordova-plugin-notification-listener&amp;lang=eng"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://florindev.ro/?page=proiecte&amp;id=cordova-plugin-notification-listener&amp;lang=eng"/>
+    <priority>0.8</priority>
+  </url>
 </urlset>
